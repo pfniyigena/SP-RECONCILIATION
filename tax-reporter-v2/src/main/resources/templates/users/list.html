@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+<meta charset="UTF-8">
+<title>Users — Tax Reporter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<th:block th:replace="~{fragments/crud-styles :: crud}"></th:block>
+</head>
+<body>
+<div class="shell">
+  <aside th:replace="~{fragments/nav :: sidebar(active='users')}"></aside>
+
+  <main class="main">
+    <div class="crud-topbar">
+      <div>
+        <h1 style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:22px;margin:0;">Users</h1>
+        <span style="font-size:12.5px;color:var(--ink-soft);">Accounts with access to this console</span>
+      </div>
+      <a class="btn btn-primary" th:href="@{/users/new}">+ New user</a>
+    </div>
+
+    <div class="crud-flash" th:if="${flashMessage}" th:text="${flashMessage}">User created.</div>
+
+    <form class="crud-search" method="get" th:action="@{/users}">
+      <input type="text" name="q" placeholder="Search username or name…" th:value="${q}">
+      <button type="submit" class="btn btn-ghost">Search</button>
+      <a class="btn btn-ghost" th:if="${q}" th:href="@{/users}">Clear</a>
+    </form>
+
+    <div class="crud-count">
+      <span th:text="${#numbers.formatInteger(users.totalElements, 0, 'COMMA')}">4</span> user(s)
+    </div>
+
+    <div class="crud-table-wrap">
+      <table class="crud-table">
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Full name</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th class="crud-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="u : ${users.content}">
+            <td class="mono" th:text="${u.username}">admin</td>
+            <td th:text="${u.fullName ?: '—'}">Administrator</td>
+            <td class="mono" th:text="${u.role}">ROLE_ADMIN</td>
+            <td>
+              <span class="badge-enabled" th:if="${u.enabled == true}">Enabled</span>
+              <span class="badge-disabled" th:if="${u.enabled != true}">Disabled</span>
+            </td>
+            <td class="crud-actions">
+              <a class="edit-link" th:href="@{/users/{id}/edit(id=${u.id})}">Edit</a>
+              <form th:action="@{/users/{id}/delete(id=${u.id})}" method="post" class="confirm-submit" style="display:inline;"
+                    th:unless="${u.username == #authentication.name}"
+                    data-confirm="Delete this user? This can't be undone.">
+                <button type="submit" class="delete-link">Delete</button>
+              </form>
+              <span th:if="${u.username == #authentication.name}" style="color:var(--ink-faint);font-size:12px;margin-left:12px;">(you)</span>
+            </td>
+          </tr>
+        </tbody>
+        <tbody th:if="${users.numberOfElements == 0}">
+          <tr>
+            <td colspan="5">
+              <div class="crud-empty">
+                <div class="glyph">— · —</div>
+                No users match this search.
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="crud-pagination" th:if="${users.totalPages > 1}">
+      <span>Page <span th:text="${users.number + 1}">1</span> of <span th:text="${users.totalPages}">3</span></span>
+      <div class="pages">
+        <a class="page-link" th:classappend="${users.first} ? 'disabled'"
+           th:href="@{/users(q=${q},page=${users.number - 1})}">‹</a>
+        <a class="page-link" th:classappend="${users.last} ? 'disabled'"
+           th:href="@{/users(q=${q},page=${users.number + 1})}">›</a>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Delegated wiring — no inline onsubmit — so this page keeps working
+  // regardless of any Content-Security-Policy the app might set.
+  document.addEventListener('submit', (e) => {
+    if (e.target.matches('.confirm-submit')) {
+      if (!confirm(e.target.dataset.confirm || 'Are you sure?')) {
+        e.preventDefault();
+      }
+    }
+  });
+</script>
+</body>
+</html>

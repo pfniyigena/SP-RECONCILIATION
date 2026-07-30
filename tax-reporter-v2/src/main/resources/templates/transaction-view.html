@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title>Transaction Detail — Tax Reporter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<style>
+  .detail-card{background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);padding:24px 26px 26px;max-width:920px;}
+  .detail-head{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;margin-bottom:18px;border-bottom:2px solid var(--ink);}
+  .detail-head .id{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-faint);}
+  .detail-head .amount{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:24px;color:var(--ink);}
+
+  .status-pill{
+    display:inline-block;padding:4px 11px;border-radius:20px;font-size:11.5px;font-weight:600;
+    text-transform:uppercase;letter-spacing:0.03em;
+  }
+  .status-PROCESSED{background:var(--green-bg);color:var(--green);}
+  .status-PENDING{background:var(--amber-bg);color:#8A6415;}
+  .status-FAILED{background:var(--red-bg);color:var(--red);}
+
+  .detail-section-title{
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12.5px;color:var(--ink-soft);
+    text-transform:uppercase;letter-spacing:0.05em;margin:22px 0 12px;
+  }
+  .detail-section:first-of-type .detail-section-title{margin-top:0;}
+  .detail-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px 24px;}
+  .detail-item .label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-faint);font-weight:600;margin-bottom:3px;}
+  .detail-item .value{font-size:14px;color:var(--ink);}
+  .detail-item .value.mono{font-family:'IBM Plex Mono',monospace;}
+  .detail-item .value.muted{color:var(--ink-faint);}
+
+  .detail-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:24px;padding-top:18px;border-top:1px solid var(--line);}
+
+  .flash-banner{
+    background:var(--green-bg);color:#215044;border:1px solid #BFDBD1;border-radius:var(--radius);
+    padding:11px 14px;margin-bottom:16px;font-size:13px;max-width:920px;
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <aside th:replace="~{fragments/nav :: sidebar(active='transactions')}"></aside>
+
+  <main class="main">
+
+  <header class="topbar">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <button class="menu-toggle" type="button" aria-label="Toggle menu">☰</button>
+      <div>
+        <h1>Transaction Detail</h1>
+        <span class="sub">Record #<span th:text="${tx.id}">1024</span></span>
+      </div>
+    </div>
+    <a class="btn btn-ghost" th:href="@{/transactions}">← Back to ledger</a>
+  </header>
+
+  <div class="flash-banner" th:if="${flashMessage}" th:text="${flashMessage}">Transaction updated.</div>
+
+  <div class="detail-card">
+
+    <div class="detail-head">
+      <div>
+        <div class="id" th:text="${tx.transactionGuid}">a1b2c3d4-...</div>
+        <div style="margin-top:8px;">
+          <span class="status-pill status-FAILED"    th:if="${tx.processed == true and tx.success != true}">Failed</span>
+          <span class="status-pill status-PROCESSED" th:if="${tx.processed == true and tx.success == true}">Processed</span>
+          <span class="status-pill status-PENDING"   th:if="${tx.processed != true}">Pending</span>
+        </div>
+      </div>
+      <div class="amount" th:text="${tx.totalAmount != null} ? ${#numbers.formatDecimal(tx.totalAmount, 1, 'COMMA', 2, 'POINT')} : '—'">12,450.00</div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Transaction</div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="label">Date / time</div>
+          <div class="value mono" th:text="${tx.dateTimeTransaction != null} ? ${#temporals.format(tx.dateTimeTransaction, 'dd MMM yyyy HH:mm')} : '—'">04 Jul 2026 09:12</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Tag number</div>
+          <div class="value mono" th:text="${tx.tagNumber ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Created</div>
+          <div class="value mono" th:text="${tx.createdAt != null} ? ${#temporals.format(tx.createdAt, 'dd MMM yyyy HH:mm')} : '—'">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Last updated</div>
+          <div class="value mono" th:text="${tx.modifiedAt != null} ? ${#temporals.format(tx.modifiedAt, 'dd MMM yyyy HH:mm')} : '—'">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Client &amp; card</div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="label">Client name</div>
+          <div class="value" th:text="${tx.clientName ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Client ID</div>
+          <div class="value mono" th:text="${tx.clientId ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Card number</div>
+          <div class="value mono" th:text="${tx.cardNumber ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Plate number</div>
+          <div class="value mono" th:text="${tx.plateNumber ?: '—'}">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Point of sale</div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="label">POS name</div>
+          <div class="value" th:text="${tx.posName ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">POS number</div>
+          <div class="value mono" th:text="${tx.posNumber ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">POS ID</div>
+          <div class="value mono" th:text="${tx.posId ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Address name</div>
+          <div class="value" th:text="${tx.addressName ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Address ID</div>
+          <div class="value mono" th:text="${tx.addressId ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Address description</div>
+          <div class="value" th:text="${tx.addressDescription ?: '—'}">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Service &amp; amount</div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="label">Service name</div>
+          <div class="value" th:text="${tx.serviceName ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Service ID</div>
+          <div class="value mono" th:text="${tx.serviceId ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Quantity</div>
+          <div class="value mono" th:text="${tx.quantity != null} ? ${#numbers.formatDecimal(tx.quantity, 1, 2)} : '—'">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Unit price</div>
+          <div class="value mono" th:text="${tx.unitPrice != null} ? ${#numbers.formatDecimal(tx.unitPrice, 1, 2)} : '—'">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Stamp &amp; SDC</div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="label">SDC ID</div>
+          <div class="value mono" th:text="${tx.sdcId ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Stamp number</div>
+          <div class="value mono" th:text="${tx.stampNumber ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">EBM number <span style="text-transform:none;font-weight:400;">(from matched deposit)</span></div>
+          <div class="value mono" th:text="${tx.ebmNumber ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Stamp data (raw)</div>
+          <div class="value mono muted" th:text="${tx.stampData ?: '—'}">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Reconciliation &amp; Matching</div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="label">Reconciliation batch</div>
+          <div class="value" th:if="${tx.reconciliation != null}">
+            <a th:href="@{/reconciliations/{id}(id=${tx.reconciliation.id})}" th:text="${tx.reconciliation.reference ?: tx.reconciliation.reconciliationDate}" style="color:var(--green);text-decoration:none;font-weight:600;">15 Jul 2026</a>
+          </div>
+          <div class="value muted" th:if="${tx.reconciliation == null}">Not reconciled</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Allocation status</div>
+          <div class="value" th:if="${tx.allocated == true}" style="color:var(--green);font-weight:600;">Fully allocated</div>
+          <div class="value" th:if="${tx.allocated != true and !#lists.isEmpty(tx.depositAllocations)}" style="color:#8A6415;font-weight:600;">Partially allocated</div>
+          <div class="value muted" th:if="${tx.allocated != true and #lists.isEmpty(tx.depositAllocations)}">Not allocated — run matching from the Customer Deposits list</div>
+        </div>
+        <div class="detail-item" th:if="${!#lists.isEmpty(tx.depositAllocations)}">
+          <div class="label">Matched deposit(s) <span style="text-transform:none;font-weight:400;">(a transaction can be split across more than one)</span></div>
+          <div class="value" th:each="alloc : ${tx.depositAllocations}" style="margin-bottom:4px;">
+            <a th:href="@{/customer-deposits/{id}(id=${alloc.deposit.id})}" th:text="${alloc.deposit.sapReference ?: alloc.deposit.transactionGuid}" style="color:var(--green);text-decoration:none;font-weight:600;">SAP-2026-00981</a>
+            <span class="mono muted" th:text="'— ' + ${#numbers.formatDecimal(alloc.allocatedAmount, 1, 'COMMA', 2, 'POINT')}"> — 1,200.00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-actions">
+      <a class="btn btn-ghost" th:href="@{/transactions}">Back to ledger</a>
+      <form th:if="${tx.processed != true}" class="confirm-submit" style="display:inline;"
+            data-confirm="Mark this transaction as processed? This confirms it manually — it doesn't re-run the automated matching engine."
+            th:action="@{/transactions/{id}/process(id=${tx.id})}" method="post">
+        <button type="submit" class="btn" style="background:var(--green);color:#fff;border-color:var(--green);">Mark as Processed</button>
+      </form>
+      <a class="btn btn-primary" th:href="@{/transactions/{id}/edit(id=${tx.id})}">Edit transaction</a>
+    </div>
+  </div>
+
+  </main>
+</div>
+
+<script>
+  // CSP-safe confirm dialog — no inline onsubmit, consistent with the rest of
+  // the app after the CSP incident on the Transactions list page's dropdown
+  // filters (inline event-handler attributes silently do nothing if the app
+  // ever serves a Content-Security-Policy without 'unsafe-inline' for script-src).
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.menu-toggle')) {
+      document.getElementById('sidebar').classList.toggle('open');
+    }
+  });
+
+  document.addEventListener('submit', (e) => {
+    if (e.target.matches('.confirm-submit')) {
+      if (!confirm(e.target.dataset.confirm || 'Are you sure?')) {
+        e.preventDefault();
+      }
+    }
+  });
+</script>
+</body>
+</html>

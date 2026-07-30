@@ -1,0 +1,11 @@
+# Active via: -Dspring.profiles.active=sp (or SPRING_PROFILES_ACTIVE=sp) at RUNTIME.
+# Building with `mvn package -Psp` alone does NOT activate this — same caveat as oracle
+# (see application-oracle.yml's header, and pom.xml's <profiles> section).
+#
+# EMPTY PLACEHOLDER — unlike oracle (whose name at least implies "Oracle datasource"), I don't
+# know what "sp" actually needs to configure differently from the base application.yml. Rather
+# than invent settings that might be wrong or misleading, this file exists so the profile loads
+# cleanly (Spring Boot doesn't error on an active profile with no matching properties file, but
+# having the file here makes the intent explicit and gives you a real place to add to) with
+# nothing in it yet. Add whatever actually distinguishes this environment — a different
+# database host, a different default admin account, feature flags, log verbosity, etc.

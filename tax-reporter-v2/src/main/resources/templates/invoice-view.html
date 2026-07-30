@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title>Invoice Detail — Tax Reporter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<style>
+  .detail-card{background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);padding:24px 26px 26px;max-width:960px;}
+  .detail-head{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;margin-bottom:18px;border-bottom:2px solid var(--ink);}
+  .detail-head .id{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-faint);}
+  .detail-head .amount{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:24px;color:var(--ink);}
+
+  .status-pill{
+    display:inline-block;padding:4px 11px;border-radius:20px;font-size:11.5px;font-weight:600;
+    text-transform:uppercase;letter-spacing:0.03em;
+  }
+  .status-PROCESSED{background:var(--green-bg);color:var(--green);}
+  .status-PENDING{background:var(--amber-bg);color:#8A6415;}
+  .status-FAILED{background:var(--red-bg);color:var(--red);}
+
+  .detail-section-title{
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12.5px;color:var(--ink-soft);
+    text-transform:uppercase;letter-spacing:0.05em;margin:22px 0 12px;
+  }
+  .detail-section:first-of-type .detail-section-title{margin-top:0;}
+  .detail-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px 24px;}
+  .detail-item .label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-faint);font-weight:600;margin-bottom:3px;}
+  .detail-item .value{font-size:14px;color:var(--ink);}
+  .detail-item .value.mono{font-family:'IBM Plex Mono',monospace;}
+  .detail-item .value.muted{color:var(--ink-faint);}
+  .detail-item.span-2{grid-column:span 2;}
+
+  .detail-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:24px;padding-top:18px;border-top:1px solid var(--line);}
+  .flash-banner{
+    background:var(--green-bg);color:#215044;border:1px solid #BFDBD1;border-radius:var(--radius);
+    padding:11px 14px;margin-bottom:16px;font-size:13px;max-width:960px;
+  }
+  .failure-box{
+    background:var(--red-bg);border:1px solid #E0BDB2;border-radius:var(--radius);
+    padding:12px 14px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#8A3222;white-space:pre-wrap;
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <aside th:replace="~{fragments/nav :: sidebar(active='invoices')}"></aside>
+
+  <main class="main">
+
+  <header class="topbar">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <button class="menu-toggle" type="button" aria-label="Toggle menu">☰</button>
+      <div>
+        <h1>Invoice Detail</h1>
+        <span class="sub">Record #<span th:text="${inv.id}">1024</span></span>
+      </div>
+    </div>
+    <a class="btn btn-ghost" th:href="@{/invoices}">← Back to ledger</a>
+  </header>
+
+  <div class="flash-banner" th:if="${flashMessage}" th:text="${flashMessage}">Invoice updated.</div>
+
+  <div class="detail-card">
+
+    <div class="detail-head">
+      <div>
+        <div class="id" th:text="${inv.stampData ?: '—'}">a1b2c3d4-...</div>
+        <div style="margin-top:8px;">
+          <span class="status-pill status-FAILED"    th:if="${inv.failureReason != null and !inv.failureReason.isBlank()}">Failed</span>
+          <span class="status-pill status-PROCESSED" th:if="${(inv.failureReason == null or inv.failureReason.isBlank()) and inv.processed == true}">Processed</span>
+          <span class="status-pill status-PENDING"   th:if="${(inv.failureReason == null or inv.failureReason.isBlank()) and inv.processed != true}">Pending</span>
+        </div>
+      </div>
+      <div class="amount" th:text="${inv.totalAmount != null} ? ${#numbers.formatDecimal(inv.totalAmount, 1, 'COMMA', 2, 'POINT')} : '—'">12,450.00</div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Registered business</div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="label">Registered name</div>
+          <div class="value" th:text="${inv.registeredName ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Registered TIN</div>
+          <div class="value mono" th:text="${inv.registeredTin ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">ERP code</div>
+          <div class="value mono" th:text="${inv.erpCode ?: '—'}">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Client</div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="label">Client name</div>
+          <div class="value" th:text="${inv.clientName ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Client TIN</div>
+          <div class="value mono" th:text="${inv.clientTin ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Client phone</div>
+          <div class="value mono" th:text="${inv.clientPhone ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Plate number</div>
+          <div class="value mono" th:text="${inv.plateNumber ?: '—'}">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Stamp &amp; receipt</div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="label">Stamp date</div>
+          <div class="value mono" th:text="${inv.stampDate != null} ? ${#temporals.format(inv.stampDate, 'dd MMM yyyy HH:mm')} : '—'">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Receipt number</div>
+          <div class="value mono" th:text="${inv.receiptNumber ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">SDC ID</div>
+          <div class="value mono" th:text="${inv.sdcId ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Stamp number</div>
+          <div class="value mono" th:text="${inv.stampNumber ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Stamp data (raw)</div>
+          <div class="value mono muted" th:text="${inv.stampData ?: '—'}">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Amounts &amp; payment</div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="label">Total tax amount</div>
+          <div class="value mono" th:text="${inv.totalTaxAmount != null} ? ${#numbers.formatDecimal(inv.totalTaxAmount, 1, 2)} : '—'">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Paid amount</div>
+          <div class="value mono" th:text="${inv.paidAmount != null} ? ${#numbers.formatDecimal(inv.paidAmount, 1, 2)} : '—'">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Transaction type</div>
+          <div class="value" th:text="${inv.transactionType ?: '—'}">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Payment mode</div>
+          <div class="value" th:text="${inv.paymentMode ?: '—'}">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-section" th:if="${inv.failureReason != null and !inv.failureReason.isBlank()}">
+      <div class="detail-section-title">Failure reason</div>
+      <div class="failure-box" th:text="${inv.failureReason}">Error detail...</div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Record</div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="label">Created</div>
+          <div class="value mono" th:text="${inv.createdAt != null} ? ${#temporals.format(inv.createdAt, 'dd MMM yyyy HH:mm')} : '—'">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Last updated</div>
+          <div class="value mono" th:text="${inv.modifiedAt != null} ? ${#temporals.format(inv.modifiedAt, 'dd MMM yyyy HH:mm')} : '—'">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-actions">
+      <a class="btn btn-ghost" th:href="@{/invoices}">Back to ledger</a>
+      <form th:if="${inv.processed != true}" class="confirm-submit" style="display:inline;"
+            data-confirm="Mark this invoice as processed? This also clears any recorded failure reason."
+            th:action="@{/invoices/{id}/process(id=${inv.id})}" method="post">
+        <button type="submit" class="btn" style="background:var(--green);color:#fff;border-color:var(--green);">Mark as Processed</button>
+      </form>
+      <a class="btn btn-primary" th:href="@{/invoices/{id}/edit(id=${inv.id})}">Edit invoice</a>
+    </div>
+  </div>
+
+  </main>
+</div>
+
+<script>
+  // Delegated wiring — no inline onclick — so this page keeps working
+  // regardless of any Content-Security-Policy the app might set.
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.menu-toggle')) {
+      document.getElementById('sidebar').classList.toggle('open');
+    }
+  });
+
+  document.addEventListener('submit', (e) => {
+    if (e.target.matches('.confirm-submit')) {
+      if (!confirm(e.target.dataset.confirm || 'Are you sure?')) {
+        e.preventDefault();
+      }
+    }
+  });
+</script>
+</body>
+</html>

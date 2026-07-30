@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title>Customers — Tax Reporter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<th:block th:replace="~{fragments/crud-styles :: crud}"></th:block>
+</head>
+<body>
+<div class="shell">
+  <aside th:replace="~{fragments/nav :: sidebar(active='customers')}"></aside>
+
+  <main class="main">
+    <div class="crud-topbar">
+      <div>
+        <h1 style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:22px;margin:0;">Customers</h1>
+        <span style="font-size:12.5px;color:var(--ink-soft);">Client records referenced by card transactions</span>
+      </div>
+      <a class="btn btn-primary" th:href="@{/customers/new}">+ New customer</a>
+    </div>
+
+    <div class="crud-flash" th:if="${flashMessage}" th:text="${flashMessage}">Customer created.</div>
+
+    <form class="crud-search" method="get" th:action="@{/customers}">
+      <input type="text" name="q" placeholder="Search name or TIN…" th:value="${q}">
+      <button type="submit" class="btn btn-ghost">Search</button>
+      <a class="btn btn-ghost" th:if="${q}" th:href="@{/customers}">Clear</a>
+    </form>
+
+    <div class="crud-count">
+      <span th:text="${#numbers.formatInteger(customers.totalElements, 0, 'COMMA')}">12</span> customer(s)
+    </div>
+
+    <div class="crud-table-wrap">
+      <table class="crud-table">
+        <thead>
+          <tr>
+            <th>Client name</th>
+            <th>TIN</th>
+            <th>Status</th>
+            <th>Allocated</th>
+            <th class="crud-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="c : ${customers.content}">
+            <td th:text="${c.clientName ?: '—'}">KAMANA Eric</td>
+            <td class="mono" th:text="${c.clientTin ?: '—'}">123456789</td>
+            <td>
+              <span class="badge-enabled" th:if="${c.enabled == true}">Enabled</span>
+              <span class="badge-disabled" th:if="${c.enabled != true}">Disabled</span>
+            </td>
+            <td>
+              <span class="badge-enabled" th:if="${c.allocated == true}">Yes</span>
+              <span class="badge-disabled" th:if="${c.allocated != true}">No</span>
+            </td>
+            <td class="crud-actions">
+              <a class="edit-link" th:href="@{/customers/{id}/edit(id=${c.id})}">Edit</a>
+              <form th:action="@{/customers/{id}/delete(id=${c.id})}" method="post" class="confirm-submit" style="display:inline;"
+                    data-confirm="Delete this customer? This can't be undone.">
+                <button type="submit" class="delete-link">Delete</button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+        <tbody th:if="${customers.numberOfElements == 0}">
+          <tr>
+            <td colspan="5">
+              <div class="crud-empty">
+                <div class="glyph">— · —</div>
+                No customers match this search.
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="crud-pagination" th:if="${customers.totalPages > 1}">
+      <span>Page <span th:text="${customers.number + 1}">1</span> of <span th:text="${customers.totalPages}">3</span></span>
+      <div class="pages">
+        <a class="page-link" th:classappend="${customers.first} ? 'disabled'"
+           th:href="@{/customers(q=${q},page=${customers.number - 1})}">‹</a>
+        <a class="page-link" th:classappend="${customers.last} ? 'disabled'"
+           th:href="@{/customers(q=${q},page=${customers.number + 1})}">›</a>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Delegated wiring — no inline onsubmit — so this page keeps working
+  // regardless of any Content-Security-Policy the app might set.
+  document.addEventListener('submit', (e) => {
+    if (e.target.matches('.confirm-submit')) {
+      if (!confirm(e.target.dataset.confirm || 'Are you sure?')) {
+        e.preventDefault();
+      }
+    }
+  });
+</script>
+</body>
+</html>

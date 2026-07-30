@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title>Deposit Detail — Tax Reporter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<style>
+  .detail-card{background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px;margin-bottom:20px;}
+  .detail-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:18px;}
+  .detail-field label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-soft);font-weight:600;margin-bottom:4px;}
+  .detail-field .value{font-size:15px;color:var(--ink);}
+  .detail-field .value.mono{font-family:'IBM Plex Mono',monospace;}
+  .detail-field .value.amount{font-family:'IBM Plex Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;}
+  .status-pill{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
+  .status-PROCESSED{background:var(--green-bg);color:var(--green);}
+  .status-PENDING{background:var(--amber-bg);color:#8A6415;}
+  .detail-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:24px;padding-top:18px;border-top:1px solid var(--line);}
+  .flash-banner{
+    background:var(--green-bg);color:#215044;border:1px solid #BFDBD1;border-radius:var(--radius);
+    padding:11px 14px;margin-bottom:16px;font-size:13px;
+  }
+  .section-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:var(--ink);margin:0 0 12px;}
+  .ledger-wrap{background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:20px;}
+  .ledger-scroll{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;min-width:900px;}
+  thead th{
+    background:var(--ink);color:#EFEDE6;text-align:left;font-size:10.5px;text-transform:uppercase;
+    letter-spacing:0.06em;padding:11px 14px;font-weight:600;border-bottom:2px solid var(--ink);white-space:nowrap;
+  }
+  thead th.num, tbody td.num{text-align:right;}
+  tbody td{padding:10px 14px;border-bottom:1px solid var(--line);font-size:13.2px;vertical-align:middle;}
+  tbody tr:nth-child(even){background:#FBFAF7;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .amount{font-family:'IBM Plex Mono',monospace;font-weight:600;font-variant-numeric:tabular-nums;}
+  .desc-primary{font-weight:500;}
+  .desc-secondary{color:var(--ink-faint);font-size:11.8px;}
+  .muted{color:var(--ink-faint);}
+  .empty-state{padding:40px 20px;text-align:center;color:var(--ink-soft);font-size:13px;}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside th:replace="~{fragments/nav :: sidebar(active='customerDeposits')}"></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div style="display:flex;align-items:baseline;gap:12px;">
+        <button class="menu-toggle" type="button" aria-label="Toggle menu">☰</button>
+        <div>
+          <h1>Deposit Detail</h1>
+          <span class="sub" th:text="${deposit.transactionGuid}">a1b2c3d4-...</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="flash-banner" th:if="${flashMessage}" th:text="${flashMessage}">Stamp data fetched.</div>
+
+    <div class="detail-card">
+      <div class="detail-grid">
+        <div class="detail-field">
+          <label>Date / Time</label>
+          <div class="value mono" th:text="${deposit.dateTimeTransaction != null} ? ${#temporals.format(deposit.dateTimeTransaction, 'dd MMM yyyy HH:mm')} : '—'">04 Jul 2026 09:12</div>
+        </div>
+        <div class="detail-field">
+          <label>Client</label>
+          <div class="value" th:text="${deposit.clientName ?: '—'}">KAMANA Eric</div>
+        </div>
+        <div class="detail-field">
+          <label>Customer (linked account)</label>
+          <div class="value" th:text="${deposit.customer != null ? deposit.customer.clientName : 'Not linked'}">KAMANA Eric</div>
+        </div>
+        <div class="detail-field">
+          <label>Service</label>
+          <div class="value" th:text="${deposit.serviceName ?: '—'}">Bulk Deposit</div>
+        </div>
+        <div class="detail-field">
+          <label>Total Amount</label>
+          <div class="value amount" th:text="${deposit.totalAmount != null} ? ${#numbers.formatDecimal(deposit.totalAmount, 1, 'COMMA', 2, 'POINT')} : '—'">12,450.00</div>
+        </div>
+        <div class="detail-field">
+          <label>Allocated <span style="text-transform:none;font-weight:400;">(matched transactions)</span></label>
+          <div class="value amount" th:text="${#numbers.formatDecimal(allocatedAmount, 1, 'COMMA', 2, 'POINT')}">8,200.00</div>
+        </div>
+        <div class="detail-field">
+          <label>Remaining Balance</label>
+          <div class="value amount" th:text="${remainingBalance != null} ? ${#numbers.formatDecimal(remainingBalance, 1, 'COMMA', 2, 'POINT')} : '—'"
+               th:style="${remainingBalance != null and remainingBalance.signum() < 0} ? 'color:var(--red);' : ''">4,250.00</div>
+        </div>
+        <div class="detail-field">
+          <label>Status</label>
+          <div class="value">
+            <span class="status-pill status-PROCESSED" th:if="${deposit.processed == true}">Processed</span>
+            <span class="status-pill status-PENDING"   th:if="${deposit.processed != true}">Pending</span>
+          </div>
+        </div>
+        <div class="detail-field">
+          <label>Client ID (legacy)</label>
+          <div class="value mono" th:text="${deposit.clientId ?: '—'}">10432</div>
+        </div>
+        <div class="detail-field">
+          <label>Service ID (legacy)</label>
+          <div class="value mono" th:text="${deposit.serviceId ?: '—'}">7</div>
+        </div>
+        <div class="detail-field">
+          <label>SAP Reference</label>
+          <div class="value mono" th:text="${deposit.sapReference ?: '—'}">SAP-2026-00981</div>
+        </div>
+        <div class="detail-field">
+          <label>Stamp Data</label>
+          <div class="value mono" th:text="${deposit.stampData ?: '—'}">00123,45678,checksum,99999</div>
+        </div>
+        <div class="detail-field">
+          <label>Stamp Number <span style="text-transform:none;font-weight:400;">(derived)</span></label>
+          <div class="value mono" th:text="${deposit.stampNumber ?: '—'}">00123/45678/99999</div>
+        </div>
+        <div class="detail-field">
+          <label>Created</label>
+          <div class="value mono" th:text="${#temporals.format(deposit.createdAt, 'dd MMM yyyy HH:mm')}">15 Jul 2026 09:12</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="section-title">Matched Card Transactions (<span th:text="${#lists.size(matchedAllocations)}">3</span>)</h2>
+    <div class="ledger-wrap">
+      <div class="ledger-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Date / Time</th>
+              <th>Client</th>
+              <th>Card / Plate</th>
+              <th>POS / Service</th>
+              <th class="num">Allocated <span style="text-transform:none;font-weight:400;">(this deposit)</span></th>
+              <th class="num">Transaction Total</th>
+              <th class="num">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr th:each="alloc : ${matchedAllocations}">
+              <td class="mono" th:text="${alloc.transaction.dateTimeTransaction != null} ? ${#temporals.format(alloc.transaction.dateTimeTransaction, 'dd MMM yyyy HH:mm')} : '—'">04 Jul 2026 09:12</td>
+              <td>
+                <div class="desc-primary" th:text="${alloc.transaction.clientName ?: '—'}">KAMANA Eric</div>
+                <div class="desc-secondary" th:text="${alloc.transaction.transactionGuid}">a1b2c3d4-...</div>
+              </td>
+              <td>
+                <div class="mono" th:text="${alloc.transaction.cardNumber ?: '—'}">5312 •••• 8890</div>
+                <div class="desc-secondary" th:text="${alloc.transaction.plateNumber}">RAD 221 B</div>
+              </td>
+              <td>
+                <div class="desc-primary" th:text="${alloc.transaction.posName ?: '—'}">Kigali Fuel Station #4</div>
+                <div class="desc-secondary" th:text="${alloc.transaction.serviceName}">Diesel</div>
+              </td>
+              <td class="num amount" th:text="${alloc.allocatedAmount != null} ? ${#numbers.formatDecimal(alloc.allocatedAmount, 1, 'COMMA', 2, 'POINT')} : '—'">
+                1,200.00
+              </td>
+              <td class="num mono muted" th:text="${alloc.transaction.totalAmount != null} ? ${#numbers.formatDecimal(alloc.transaction.totalAmount, 1, 'COMMA', 2, 'POINT')} : '—'">
+                1,200.00
+              </td>
+              <td class="num" style="white-space:nowrap;">
+                <a th:href="@{/transactions/{id}(id=${alloc.transaction.id})}" style="font-size:12.5px;font-weight:600;color:var(--green);text-decoration:none;">View</a>
+              </td>
+            </tr>
+          </tbody>
+          <tbody th:if="${#lists.isEmpty(matchedAllocations)}">
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">No transactions matched to this deposit yet — run matching from the Customer Deposits list.</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="detail-actions">
+      <a class="btn btn-ghost" th:href="@{/customer-deposits}">Back to deposits</a>
+      <form class="confirm-submit" style="display:inline;"
+            data-confirm="Fetch stamp data from the SQL Server Stamp table using this deposit's SAP reference? If found, it will overwrite the Stamp Data field below."
+            th:action="@{/customer-deposits/{id}/fetch-stamp-data(id=${deposit.id})}" method="post">
+        <button type="submit" class="btn" style="background:var(--green);color:#fff;border-color:var(--green);">Fetch stamp data (SQL Server)</button>
+      </form>
+      <a class="btn btn-primary" th:href="@{/customer-deposits/{id}/edit(id=${deposit.id})}">Edit deposit</a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.menu-toggle')) {
+      document.getElementById('sidebar').classList.toggle('open');
+    }
+  });
+
+  document.addEventListener('submit', (e) => {
+    if (e.target.matches('.confirm-submit')) {
+      if (!confirm(e.target.dataset.confirm || 'Are you sure?')) {
+        e.preventDefault();
+      }
+    }
+  });
+</script>
+</body>
+</html>

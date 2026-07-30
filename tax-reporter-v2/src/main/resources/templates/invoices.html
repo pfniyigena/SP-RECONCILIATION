@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title>Invoice Ledger — Tax Reporter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="_csrf" th:if="${_csrf}" th:content="${_csrf.token}">
+<meta name="_csrf_header" th:if="${_csrf}" th:content="${_csrf.headerName}">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<style>
+  /* page-specific styles for the invoice table (tokens/sidebar/topbar come from fragments/styles) */
+
+  /* ---------- Filter panel ---------- */
+  .filters{background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:18px;}
+  .filters-row{display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:14px;padding:16px 18px;align-items:end;}
+  .filters-row .search-field{grid-column:1 / -1;}
+  @media (min-width: 1180px){
+    .filters-row .search-field{grid-column:span 2;}
+  }
+  .filters-actions{display:flex;gap:10px;grid-column:1 / -1;justify-content:flex-end;padding-top:2px;}
+  @media (min-width: 780px){
+    .filters-actions{grid-column:auto;justify-content:flex-start;}
+  }
+  .field{display:flex;flex-direction:column;gap:5px;min-width:0;}
+  .field label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-soft);font-weight:600;}
+  .field input,.field select{
+    font-family:'Inter',sans-serif;font-size:13.5px;color:var(--ink);
+    border:1px solid var(--line-strong);border-radius:var(--radius);
+    padding:8px 10px;background:#fff;width:100%;
+  }
+  .field input[type="date"]{font-family:'IBM Plex Mono',monospace;font-size:12.5px;}
+  .search-field input{font-family:'IBM Plex Mono',monospace;}
+
+  .active-filters{display:flex;flex-wrap:wrap;gap:8px;padding:0 18px 14px;}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;
+    background:var(--amber-bg);color:#7A5A1E;border:1px solid #E3CE9C;
+    font-size:12px;font-family:'IBM Plex Mono',monospace;
+    padding:4px 8px 4px 10px;border-radius:20px;
+  }
+  .chip a{color:#7A5A1E;text-decoration:none;font-weight:700;font-size:13px;line-height:1;padding-left:2px;}
+  .chip a:hover{color:var(--red);}
+
+  /* ---------- Result meta bar ---------- */
+  .result-bar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 2px 10px;color:var(--ink-soft);font-size:12.5px;}
+  .result-bar .count strong{color:var(--ink);font-family:'IBM Plex Mono',monospace;}
+  .page-size{display:flex;align-items:center;gap:8px;}
+  .page-size select{font-family:'IBM Plex Mono',monospace;font-size:12.5px;border:1px solid var(--line-strong);border-radius:var(--radius);padding:5px 6px;background:#fff;}
+
+  /* ---------- Table ---------- */
+  .ledger-wrap{background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;}
+  .ledger-scroll{overflow-x:auto;max-height:68vh;overflow-y:auto;}
+  table{width:100%;border-collapse:collapse;min-width:1320px;}
+  thead th{
+    position:sticky;top:0;z-index:2;background:var(--ink);color:#EFEDE6;
+    text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;
+    padding:11px 14px;font-weight:600;border-bottom:2px solid var(--ink);white-space:nowrap;
+  }
+  thead th a{display:inline-flex;align-items:center;gap:5px;color:inherit;text-decoration:none;}
+  thead th a:hover{color:#fff;}
+  .sort-arrow{font-size:10px;opacity:0.85;}
+  thead th.num, tbody td.num{text-align:right;}
+  tbody td{padding:10px 14px;border-bottom:1px solid var(--line);font-size:13.2px;vertical-align:middle;}
+  tbody tr:nth-child(even){background:#FBFAF7;}
+  tbody tr:hover{background:var(--green-bg);}
+  td.mono, .mono{font-family:'IBM Plex Mono',monospace;}
+  td.amount{font-family:'IBM Plex Mono',monospace;font-weight:600;font-variant-numeric:tabular-nums;}
+  .desc-primary{font-weight:500;}
+  .desc-secondary{color:var(--ink-faint);font-size:11.8px;}
+
+  .status-pill{
+    display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;
+    text-transform:uppercase;letter-spacing:0.03em;
+  }
+  .status-PROCESSED{background:var(--green-bg);color:var(--green);}
+  .status-PENDING{background:var(--amber-bg);color:#8A6415;}
+  .status-FAILED{background:var(--red-bg);color:var(--red);}
+
+  .empty-state{padding:60px 20px;text-align:center;color:var(--ink-soft);}
+  .empty-state .glyph{font-family:'IBM Plex Mono',monospace;font-size:28px;color:var(--line-strong);margin-bottom:10px;}
+  .empty-state strong{color:var(--ink);display:block;margin-bottom:4px;font-size:15px;}
+
+  tfoot td{
+    padding:13px 14px;border-top:3px double var(--ink);
+    font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12.8px;
+    background:#FBFAF7;color:var(--ink);
+  }
+  tfoot .label{color:var(--ink-soft);font-weight:500;text-transform:uppercase;font-size:10.5px;letter-spacing:0.05em;}
+
+  /* ---------- Pagination ---------- */
+  .pagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:16px 4px 0;}
+  .pagination .pages{display:flex;gap:4px;align-items:center;}
+  .page-link{
+    min-width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;
+    border:1px solid var(--line-strong);border-radius:var(--radius);text-decoration:none;
+    color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:12.5px;background:#fff;
+  }
+  .page-link:hover{border-color:var(--ink);color:var(--ink);}
+  .page-link.current{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:600;}
+  .page-link.disabled{opacity:0.35;pointer-events:none;}
+  .jump{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-soft);}
+  .jump input{width:56px;font-family:'IBM Plex Mono',monospace;text-align:center;border:1px solid var(--line-strong);border-radius:var(--radius);padding:5px;}
+
+  @media (max-width: 980px){
+    .filters-row{grid-template-columns:1fr 1fr;}
+  }
+  @media (max-width: 640px){
+    .topbar{flex-direction:column;gap:10px;align-items:flex-start;}
+    .topbar .stamp{text-align:left;}
+    .filters-row{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <aside th:replace="~{fragments/nav :: sidebar(active='invoices')}"></aside>
+
+  <main class="main">
+
+  <header class="topbar">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <button class="menu-toggle" type="button" aria-label="Toggle menu">☰</button>
+      <div>
+        <h1>Invoice Ledger</h1>
+        <span class="sub">Fiscal invoices — RRA/EBM stamping records</span>
+      </div>
+    </div>
+    <div class="stamp" style="display:flex;align-items:center;gap:16px;">
+      <div style="text-align:right;">
+        <div>SOURCE: TAX_REPORTER_INVOICE</div>
+        <div th:text="'AS OF ' + ${#temporals.format(#temporals.createNow(), 'dd MMM yyyy, HH:mm')}">AS OF 04 JUL 2026, 09:12</div>
+      </div>
+      <a class="btn btn-primary" th:href="@{/invoices/new}" style="font-family:'Inter',sans-serif;">+ New Invoice</a>
+    </div>
+  </header>
+
+  <!-- ===================== Filter panel ===================== -->
+  <form class="filters" method="get" th:action="@{/invoices}" id="filterForm">
+    <input type="hidden" name="sort" th:value="${param.sort}">
+    <input type="hidden" name="size" th:value="${param.size}">
+
+    <div class="filters-row">
+      <div class="field search-field">
+        <label for="q">Search name / TIN / phone / SDC / stamp / receipt #</label>
+        <input type="text" id="q" name="q" placeholder="e.g. KAMANA, 123456789, or a receipt number" th:value="${filter.q}">
+      </div>
+      <div class="field">
+        <label for="dateFrom">Stamp date from</label>
+        <input type="date" id="dateFrom" name="dateFrom" th:value="${filter.dateFrom}">
+      </div>
+      <div class="field">
+        <label for="dateTo">Stamp date to</label>
+        <input type="date" id="dateTo" name="dateTo" th:value="${filter.dateTo}">
+      </div>
+      <div class="field">
+        <label for="status">Status</label>
+        <select id="status" name="status">
+          <option value="">All statuses</option>
+          <option value="PROCESSED" th:selected="${filter.status == 'PROCESSED'}">Processed</option>
+          <option value="PENDING"   th:selected="${filter.status == 'PENDING'}">Pending</option>
+          <option value="FAILED"    th:selected="${filter.status == 'FAILED'}">Failed</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="minAmount">Min amount</label>
+        <input type="number" step="0.01" id="minAmount" name="minAmount" placeholder="0.00" th:value="${filter.minAmount}">
+      </div>
+      <div class="field">
+        <label for="maxAmount">Max amount</label>
+        <input type="number" step="0.01" id="maxAmount" name="maxAmount" placeholder="No limit" th:value="${filter.maxAmount}">
+      </div>
+      <div class="field">
+        <label for="plateNumber">Plate number</label>
+        <input type="text" id="plateNumber" name="plateNumber" class="mono" placeholder="e.g. RAD 221 B" th:value="${filter.plateNumber}">
+      </div>
+      <div class="filters-actions">
+        <button type="submit" class="btn btn-primary">Apply filters</button>
+        <a class="btn btn-ghost" th:href="@{/invoices}">Reset</a>
+      </div>
+    </div>
+
+    <div class="active-filters" th:if="${hasActiveFilters}">
+      <span class="chip" th:if="${filter.q != null and !filter.q.isBlank()}">
+        search: <span th:text="${filter.q}">KAMANA</span>
+        <a th:href="@{/invoices(status=${filter.status},dateFrom=${filter.dateFrom},dateTo=${filter.dateTo},plateNumber=${filter.plateNumber})}">&times;</a>
+      </span>
+      <span class="chip" th:if="${filter.status != null and !filter.status.isBlank()}">
+        status: <span th:text="${filter.status}">PROCESSED</span>
+        <a th:href="@{/invoices(q=${filter.q},dateFrom=${filter.dateFrom},dateTo=${filter.dateTo},plateNumber=${filter.plateNumber})}">&times;</a>
+      </span>
+      <span class="chip" th:if="${filter.dateFrom != null or filter.dateTo != null}">
+        date: <span th:text="${(filter.dateFrom != null ? filter.dateFrom : '…') + ' → ' + (filter.dateTo != null ? filter.dateTo : '…')}">01/06/2026 → 04/07/2026</span>
+        <a th:href="@{/invoices(q=${filter.q},status=${filter.status},plateNumber=${filter.plateNumber})}">&times;</a>
+      </span>
+      <span class="chip" th:if="${filter.minAmount != null or filter.maxAmount != null}">
+        amount: <span th:text="${(filter.minAmount != null ? filter.minAmount : '0') + ' – ' + (filter.maxAmount != null ? filter.maxAmount : '∞')}">0 – ∞</span>
+        <a th:href="@{/invoices(q=${filter.q},status=${filter.status},dateFrom=${filter.dateFrom},dateTo=${filter.dateTo},plateNumber=${filter.plateNumber})}">&times;</a>
+      </span>
+      <span class="chip" th:if="${filter.plateNumber != null and !filter.plateNumber.isBlank()}">
+        plate: <span th:text="${filter.plateNumber}">RAD 221 B</span>
+        <a th:href="@{/invoices(q=${filter.q},status=${filter.status},dateFrom=${filter.dateFrom},dateTo=${filter.dateTo},minAmount=${filter.minAmount},maxAmount=${filter.maxAmount})}">&times;</a>
+      </span>
+    </div>
+  </form>
+
+  <!-- ===================== Result meta ===================== -->
+  <div class="result-bar">
+    <div class="count">
+      Showing <strong th:text="${invoices.numberOfElements}">50</strong> of
+      <strong th:text="${#numbers.formatInteger(invoices.totalElements, 0, 'COMMA')}">3,204</strong> invoices
+    </div>
+    <div class="page-size">
+      <label for="sizeSelect">Rows per page</label>
+      <select id="sizeSelect">
+        <option value="25"  th:selected="${invoices.size == 25}">25</option>
+        <option value="50"  th:selected="${invoices.size == 50}">50</option>
+        <option value="100" th:selected="${invoices.size == 100}">100</option>
+        <option value="250" th:selected="${invoices.size == 250}">250</option>
+      </select>
+      <span style="width:1px;height:20px;background:var(--line-strong);display:inline-block;margin:0 4px;"></span>
+      <button type="button" class="btn btn-ghost export-btn" data-format="xlsx" style="padding:6px 12px;font-size:12.5px;">⇩ Excel</button>
+      <button type="button" class="btn btn-ghost export-btn" data-format="pdf" style="padding:6px 12px;font-size:12.5px;"
+              title="PDF export is capped at 5,000 rows — use Excel for the full filtered set">⇩ PDF</button>
+      <span id="exportStatus" class="mono" style="font-size:12px;color:var(--ink-soft);"></span>
+    </div>
+  </div>
+
+  <!-- ===================== Table ===================== -->
+  <div class="ledger-wrap">
+    <div class="ledger-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>
+              <a th:href="@{/invoices(q=${param.q},status=${param.status},dateFrom=${param.dateFrom},dateTo=${param.dateTo},minAmount=${param.minAmount},maxAmount=${param.maxAmount},plateNumber=${param.plateNumber},size=${invoices.size},sort='stampDate,' + (${sortProperty == 'stampDate' and sortDirection == 'asc'} ? 'desc' : 'asc'))}">
+                Stamp Date
+                <span class="sort-arrow" th:if="${sortProperty == 'stampDate' and sortDirection == 'asc'}">▲</span>
+                <span class="sort-arrow" th:if="${sortProperty == 'stampDate' and sortDirection == 'desc'}">▼</span>
+              </a>
+            </th>
+            <th>Registered / Client</th>
+            <th>Receipt #</th>
+            <th>SDC / Stamp</th>
+            <th>Plate Number</th>
+            <th class="num">
+              <a th:href="@{/invoices(q=${param.q},status=${param.status},dateFrom=${param.dateFrom},dateTo=${param.dateTo},minAmount=${param.minAmount},maxAmount=${param.maxAmount},plateNumber=${param.plateNumber},size=${invoices.size},sort='totalAmount,' + (${sortProperty == 'totalAmount' and sortDirection == 'asc'} ? 'desc' : 'asc'))}">
+                Amount
+                <span class="sort-arrow" th:if="${sortProperty == 'totalAmount' and sortDirection == 'asc'}">▲</span>
+                <span class="sort-arrow" th:if="${sortProperty == 'totalAmount' and sortDirection == 'desc'}">▼</span>
+              </a>
+            </th>
+            <th>Payment</th>
+            <th>Status</th>
+            <th class="num">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="inv : ${invoices.content}">
+            <td class="mono" th:text="${inv.stampDate != null} ? ${#temporals.format(inv.stampDate, 'dd MMM yyyy HH:mm')} : '—'">04 Jul 2026 09:12</td>
+            <td>
+              <div class="desc-primary" th:text="${inv.registeredName ?: '—'}">Kigali Fuel Ltd</div>
+              <div class="desc-secondary" th:text="${(inv.clientName ?: '—') + (inv.clientTin != null ? ' · TIN ' + inv.clientTin : '')}">KAMANA Eric · TIN 123456789</div>
+            </td>
+            <td class="mono" th:text="${inv.receiptNumber ?: '—'}">1024</td>
+            <td>
+              <div class="mono" th:text="${inv.sdcId ?: '—'}">SDC00012345</div>
+              <div class="desc-secondary mono" th:text="${inv.stampNumber ?: (inv.stampData ?: '—')}">00123/45678</div>
+            </td>
+            <td class="mono" th:text="${inv.plateNumber ?: '—'}">RAD 221 B</td>
+            <td class="num amount" th:text="${inv.totalAmount != null} ? ${#numbers.formatDecimal(inv.totalAmount, 1, 'COMMA', 2, 'POINT')} : '—'">
+              12,450.00
+            </td>
+            <td th:text="${inv.paymentMode ?: '—'}">Cash</td>
+            <td>
+              <span class="status-pill status-FAILED"    th:if="${inv.failureReason != null and !inv.failureReason.isBlank()}">Failed</span>
+              <span class="status-pill status-PROCESSED" th:if="${(inv.failureReason == null or inv.failureReason.isBlank()) and inv.processed == true}">Processed</span>
+              <span class="status-pill status-PENDING"   th:if="${(inv.failureReason == null or inv.failureReason.isBlank()) and inv.processed != true}">Pending</span>
+            </td>
+            <td class="num" style="white-space:nowrap;">
+              <a th:href="@{/invoices/{id}(id=${inv.id})}" style="font-size:12.5px;font-weight:600;color:var(--green);text-decoration:none;">View</a>
+              &nbsp;·&nbsp;
+              <a th:href="@{/invoices/{id}/edit(id=${inv.id})}" style="font-size:12.5px;font-weight:600;color:var(--ink-soft);text-decoration:none;">Edit</a>
+            </td>
+          </tr>
+        </tbody>
+
+        <tbody th:if="${invoices.numberOfElements == 0}">
+          <tr>
+            <td colspan="9">
+              <div class="empty-state">
+                <div class="glyph">— · —</div>
+                <strong>No invoices match these filters</strong>
+                No entries fall within the current search and filter combination. Widen the date range or clear a filter.
+              </div>
+            </td>
+          </tr>
+        </tbody>
+
+        <tfoot th:if="${invoices.numberOfElements > 0}">
+          <tr>
+            <td colspan="5" class="label">Page subtotal (this page only)</td>
+            <td class="num" th:text="${#numbers.formatDecimal(pageSubtotal, 1, 'COMMA', 2, 'POINT')}">184,220.50</td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===================== Pagination ===================== -->
+  <div class="pagination" th:if="${invoices.totalPages > 0}">
+    <div class="pages">
+      <a class="page-link" th:classappend="${invoices.first} ? 'disabled'"
+         th:href="@{/invoices(q=${param.q},status=${param.status},dateFrom=${param.dateFrom},dateTo=${param.dateTo},minAmount=${param.minAmount},maxAmount=${param.maxAmount},plateNumber=${param.plateNumber},size=${invoices.size},sort=${param.sort},page=0)}">«</a>
+      <a class="page-link" th:classappend="${invoices.first} ? 'disabled'"
+         th:href="@{/invoices(q=${param.q},status=${param.status},dateFrom=${param.dateFrom},dateTo=${param.dateTo},minAmount=${param.minAmount},maxAmount=${param.maxAmount},plateNumber=${param.plateNumber},size=${invoices.size},sort=${param.sort},page=${invoices.number - 1})}">‹</a>
+
+      <span th:each="p : ${#numbers.sequence(
+                T(java.lang.Math).max(0, invoices.number - 2),
+                T(java.lang.Math).min(invoices.totalPages - 1, invoices.number + 2))}">
+        <a class="page-link" th:classappend="${p == invoices.number} ? 'current'"
+           th:href="@{/invoices(q=${param.q},status=${param.status},dateFrom=${param.dateFrom},dateTo=${param.dateTo},minAmount=${param.minAmount},maxAmount=${param.maxAmount},plateNumber=${param.plateNumber},size=${invoices.size},sort=${param.sort},page=${p})}"
+           th:text="${p + 1}">1</a>
+      </span>
+
+      <a class="page-link" th:classappend="${invoices.last} ? 'disabled'"
+         th:href="@{/invoices(q=${param.q},status=${param.status},dateFrom=${param.dateFrom},dateTo=${param.dateTo},minAmount=${param.minAmount},maxAmount=${param.maxAmount},plateNumber=${param.plateNumber},size=${invoices.size},sort=${param.sort},page=${invoices.number + 1})}">›</a>
+      <a class="page-link" th:classappend="${invoices.last} ? 'disabled'"
+         th:href="@{/invoices(q=${param.q},status=${param.status},dateFrom=${param.dateFrom},dateTo=${param.dateTo},minAmount=${param.minAmount},maxAmount=${param.maxAmount},plateNumber=${param.plateNumber},size=${invoices.size},sort=${param.sort},page=${invoices.totalPages - 1})}">»</a>
+    </div>
+
+    <form class="jump" th:action="@{/invoices}" method="get">
+      <input type="hidden" name="q" th:value="${param.q}">
+      <input type="hidden" name="status" th:value="${param.status}">
+      <input type="hidden" name="dateFrom" th:if="${filter.dateFrom != null}" th:value="${param.dateFrom}">
+      <input type="hidden" name="dateTo" th:if="${filter.dateTo != null}" th:value="${param.dateTo}">
+      <input type="hidden" name="minAmount" th:if="${filter.minAmount != null}" th:value="${param.minAmount}">
+      <input type="hidden" name="maxAmount" th:if="${filter.maxAmount != null}" th:value="${param.maxAmount}">
+      <input type="hidden" name="plateNumber" th:value="${param.plateNumber}">
+      <input type="hidden" name="size" th:value="${invoices.size}">
+      <input type="hidden" name="sort" th:value="${param.sort}">
+      Page
+      <input type="number" name="page" min="1" th:max="${invoices.totalPages}" th:placeholder="${invoices.number + 1}">
+      of <span class="mono" th:text="${#numbers.formatInteger(invoices.totalPages, 0, 'COMMA')}">140</span>
+      <button type="submit" class="btn btn-ghost">Go</button>
+    </form>
+  </div>
+
+  </main>
+</div>
+
+<script th:inline="javascript">
+  const CTX = /*[[@{/}]]*/ '/';
+  const SORT_PROPERTY = /*[[${sortProperty}]]*/ 'stampDate';
+  const SORT_DIRECTION = /*[[${sortDirection}]]*/ 'desc';
+  const CSRF_TOKEN = document.querySelector('meta[name="_csrf"]')?.content;
+  const CSRF_HEADER = document.querySelector('meta[name="_csrf_header"]')?.content;
+
+  // Delegated wiring — no inline onclick/onchange/onsubmit — so this page keeps
+  // working regardless of any Content-Security-Policy the app might set. See
+  // the note in transactions.html for the incident that made this the required
+  // pattern for every interactive control in this app.
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.menu-toggle')) {
+      document.getElementById('sidebar').classList.toggle('open');
+      return;
+    }
+    const exportBtn = e.target.closest('.export-btn');
+    if (exportBtn) {
+      startExport(exportBtn.dataset.format, exportBtn);
+    }
+  });
+
+  document.addEventListener('change', (e) => {
+    if (e.target.id === 'sizeSelect') {
+      changeSize(e.target.value);
+    }
+  });
+
+  document.addEventListener('submit', (e) => {
+    if (e.target.matches('.jump')) {
+      jumpToPage(e);
+    }
+  });
+
+  function cleanFilterParams(){
+    const form = document.getElementById('filterForm');
+    const params = new URLSearchParams(new FormData(form));
+    for (const key of [...params.keys()]) {
+      if (params.get(key) === '') {
+        params.delete(key);
+      }
+    }
+    return params;
+  }
+
+  function changeSize(size){
+    const params = cleanFilterParams();
+    params.set('size', size);
+    params.set('page', 0);
+    window.location.href = CTX + 'invoices?' + params.toString();
+  }
+
+  function jumpToPage(e){
+    const input = e.target.querySelector('input[name="page"]');
+    const val = parseInt(input.value, 10);
+    if (!val || val < 1){ e.preventDefault(); return; }
+    input.value = val - 1;
+  }
+
+  function setExportStatus(text){
+    const el = document.getElementById('exportStatus');
+    if (el) el.textContent = text;
+  }
+
+  async function startExport(format, btnEl){
+    const originalLabel = btnEl.textContent;
+    btnEl.disabled = true;
+    btnEl.textContent = 'Starting…';
+    setExportStatus('');
+
+    const params = cleanFilterParams();
+    params.delete('size');
+    params.set('sort', SORT_PROPERTY + ',' + SORT_DIRECTION);
+
+    const headers = {};
+    if (CSRF_TOKEN && CSRF_HEADER) headers[CSRF_HEADER] = CSRF_TOKEN;
+
+    try {
+      const res = await fetch(CTX + 'invoices/export/' + format + '/jobs?' + params.toString(), {
+        method: 'POST',
+        headers
+      });
+      if (!res.ok) throw new Error('Could not start export (HTTP ' + res.status + ')');
+      const job = await res.json();
+      pollExportJob(job.jobId, btnEl, originalLabel);
+    } catch (e) {
+      btnEl.textContent = 'Export failed';
+      setExportStatus(e.message || 'Could not start export');
+      setTimeout(() => { btnEl.disabled = false; btnEl.textContent = originalLabel; }, 3000);
+    }
+  }
+
+  async function pollExportJob(jobId, btnEl, originalLabel){
+    try {
+      const res = await fetch(CTX + 'exports/jobs/' + jobId);
+      if (!res.ok) throw new Error('Lost track of export job');
+      const job = await res.json();
+
+      if (job.status === 'COMPLETED') {
+        btnEl.textContent = originalLabel;
+        btnEl.disabled = false;
+        const rows = job.totalMatching >= 0 ? job.totalMatching.toLocaleString() : '';
+        setExportStatus('Ready — ' + rows + ' rows' + (job.truncated ? ' (PDF truncated to first 5,000 — use Excel for the full set)' : ''));
+        window.location = CTX + 'exports/jobs/' + jobId + '/download';
+        return;
+      }
+
+      if (job.status === 'FAILED') {
+        btnEl.textContent = originalLabel;
+        btnEl.disabled = false;
+        setExportStatus('Export failed: ' + (job.errorMessage || 'unknown error'));
+        return;
+      }
+
+      const rowsLabel = job.totalMatching >= 0 ? ' — ' + job.totalMatching.toLocaleString() + ' matching rows' : '';
+      btnEl.textContent = 'Generating…';
+      setExportStatus((job.status === 'QUEUED' ? 'Queued' : 'Generating') + rowsLabel);
+      setTimeout(() => pollExportJob(jobId, btnEl, originalLabel), 1500);
+    } catch (e) {
+      setTimeout(() => pollExportJob(jobId, btnEl, originalLabel), 3000);
+    }
+  }
+</script>
+</body>
+</html>

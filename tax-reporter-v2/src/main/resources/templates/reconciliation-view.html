@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title>Reconciliation Detail — Tax Reporter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="_csrf" th:if="${_csrf}" th:content="${_csrf.token}">
+<meta name="_csrf_header" th:if="${_csrf}" th:content="${_csrf.headerName}">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<style>
+  .detail-card{background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px;margin-bottom:20px;}
+  .detail-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:18px;}
+  .detail-field label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-soft);font-weight:600;margin-bottom:4px;}
+  .detail-field .value{font-size:15px;color:var(--ink);}
+  .detail-field .value.mono{font-family:'IBM Plex Mono',monospace;}
+  .detail-field .value.amount{font-family:'IBM Plex Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;}
+
+  .ledger-wrap{background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;}
+  .ledger-scroll{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;min-width:1080px;}
+  thead th{
+    background:var(--ink);color:#EFEDE6;text-align:left;font-size:10.5px;text-transform:uppercase;
+    letter-spacing:0.06em;padding:11px 14px;font-weight:600;border-bottom:2px solid var(--ink);white-space:nowrap;
+  }
+  thead th.num, tbody td.num{text-align:right;}
+  tbody td{padding:10px 14px;border-bottom:1px solid var(--line);font-size:13.2px;vertical-align:middle;}
+  tbody tr:nth-child(even){background:#FBFAF7;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .amount{font-family:'IBM Plex Mono',monospace;font-weight:600;font-variant-numeric:tabular-nums;}
+  .desc-primary{font-weight:500;}
+  .desc-secondary{color:var(--ink-faint);font-size:11.8px;}
+  tfoot td{
+    padding:13px 14px;border-top:3px double var(--ink);
+    font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12.8px;
+    background:#FBFAF7;color:var(--ink);
+  }
+  tfoot .label{color:var(--ink-soft);font-weight:500;text-transform:uppercase;font-size:10.5px;letter-spacing:0.05em;}
+  .pagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:16px 4px 0;}
+  .pagination .pages{display:flex;gap:4px;align-items:center;}
+  .page-link{
+    min-width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;
+    border:1px solid var(--line-strong);border-radius:var(--radius);text-decoration:none;
+    color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:12.5px;background:#fff;
+  }
+  .page-link:hover{border-color:var(--ink);color:var(--ink);}
+  .page-link.disabled{opacity:0.35;pointer-events:none;}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside th:replace="~{fragments/nav :: sidebar(active='reconciliations')}"></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1>Reconciliation</h1>
+        <span class="sub">Parent batch — these transactions are hidden from the normal ledger</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span id="exportStatus" class="mono" style="font-size:12px;color:var(--ink-soft);"></span>
+        <button type="button" class="btn btn-ghost export-btn" data-format="xlsx" style="padding:6px 12px;font-size:12.5px;">⇩ Excel</button>
+        <button type="button" class="btn btn-ghost export-btn" data-format="pdf" style="padding:6px 12px;font-size:12.5px;"
+                title="PDF export is capped at 5,000 rows — use Excel for the full batch">⇩ PDF</button>
+        <a class="btn btn-ghost" th:href="@{/reconciliations}">← Back to reconciliations</a>
+      </div>
+    </header>
+
+    <div class="detail-card">
+      <div class="detail-grid">
+        <div class="detail-field">
+          <label>Date</label>
+          <div class="value mono" th:text="${batch.reconciliationDate}">15 Jul 2026</div>
+        </div>
+        <div class="detail-field">
+          <label>Reference</label>
+          <div class="value" th:text="${batch.reference ?: '—'}">July batch 2</div>
+        </div>
+        <div class="detail-field">
+          <label>Transactions</label>
+          <div class="value mono" th:text="${transactions.totalElements}">42</div>
+        </div>
+        <div class="detail-field">
+          <label>Total Amount</label>
+          <div class="value amount" th:text="${#numbers.formatDecimal(total, 1, 'COMMA', 2, 'POINT')}">184,220.50</div>
+        </div>
+        <div class="detail-field">
+          <label>Created</label>
+          <div class="value mono" th:text="${#temporals.format(batch.createdAt, 'dd MMM yyyy HH:mm')}">15 Jul 2026 09:12</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ledger-wrap">
+      <div class="ledger-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Date / Time</th>
+              <th>Client</th>
+              <th>Card / Plate</th>
+              <th>POS / Service</th>
+              <th>SDC / Stamp</th>
+              <th class="num">Amount</th>
+              <th class="num">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr th:each="tx : ${transactions.content}">
+              <td class="mono" th:text="${tx.dateTimeTransaction != null} ? ${#temporals.format(tx.dateTimeTransaction, 'dd MMM yyyy HH:mm')} : '—'">04 Jul 2026 09:12</td>
+              <td>
+                <div class="desc-primary" th:text="${tx.clientName ?: '—'}">KAMANA Eric</div>
+                <div class="desc-secondary" th:text="${tx.transactionGuid}">a1b2c3d4-...</div>
+              </td>
+              <td>
+                <div class="mono" th:text="${tx.cardNumber ?: '—'}">5312 •••• 8890</div>
+                <div class="desc-secondary" th:text="${tx.plateNumber}">RAD 221 B</div>
+              </td>
+              <td>
+                <div class="desc-primary" th:text="${tx.posName ?: '—'}">Kigali Fuel Station #4</div>
+                <div class="desc-secondary" th:text="${tx.serviceName}">Diesel</div>
+              </td>
+              <td>
+                <div class="mono" th:text="${tx.sdcId ?: '—'}">SDC00012345</div>
+                <div class="desc-secondary mono" th:text="${tx.stampNumber ?: (tx.stampData ?: '—')}">00123/45678</div>
+              </td>
+              <td class="num amount" th:text="${tx.totalAmount != null} ? ${#numbers.formatDecimal(tx.totalAmount, 1, 'COMMA', 2, 'POINT')} : '—'">
+                12,450.00
+              </td>
+              <td class="num" style="white-space:nowrap;">
+                <a th:href="@{/transactions/{id}(id=${tx.id})}" style="font-size:12.5px;font-weight:600;color:var(--green);text-decoration:none;">View</a>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="5" class="label">Total</td>
+              <td class="num" th:text="${#numbers.formatDecimal(total, 1, 'COMMA', 2, 'POINT')}">184,220.50</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="pagination" th:if="${transactions.totalPages > 0}">
+      <span style="font-size:12.5px;color:var(--ink-soft);">
+        Page <span th:text="${transactions.number + 1}">1</span> of
+        <span th:text="${transactions.totalPages}">3</span>
+      </span>
+      <div class="pages">
+        <a class="page-link" th:classappend="${transactions.first} ? 'disabled'"
+           th:href="@{/reconciliations/{id}(id=${batch.id},page=0)}">«</a>
+        <a class="page-link" th:classappend="${transactions.first} ? 'disabled'"
+           th:href="@{/reconciliations/{id}(id=${batch.id},page=${transactions.number - 1})}">‹</a>
+        <a class="page-link" th:classappend="${transactions.last} ? 'disabled'"
+           th:href="@{/reconciliations/{id}(id=${batch.id},page=${transactions.number + 1})}">›</a>
+        <a class="page-link" th:classappend="${transactions.last} ? 'disabled'"
+           th:href="@{/reconciliations/{id}(id=${batch.id},page=${transactions.totalPages - 1})}">»</a>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script th:inline="javascript">
+  const CTX = /*[[@{/}]]*/ '/';
+  const RECONCILIATION_ID = /*[[${batch.id}]]*/ '';
+  const CSRF_TOKEN = document.querySelector('meta[name="_csrf"]')?.content;
+  const CSRF_HEADER = document.querySelector('meta[name="_csrf_header"]')?.content;
+
+  document.addEventListener('click', (e) => {
+    const exportBtn = e.target.closest('.export-btn');
+    if (exportBtn) {
+      startExport(exportBtn.dataset.format, exportBtn);
+    }
+  });
+
+  // ---------------------------------------------------------------- Export
+  //
+  // Same background-job pattern as the Transactions/Invoices list exports (see
+  // transactions.html) — generation isn't tied to one HTTP connection staying open. No filter
+  // params here since this exports one specific reconciliation batch, identified by
+  // RECONCILIATION_ID, not a filtered list.
+
+  function setExportStatus(text){
+    const el = document.getElementById('exportStatus');
+    if (el) el.textContent = text;
+  }
+
+  async function startExport(format, btnEl){
+    const originalLabel = btnEl.textContent;
+    btnEl.disabled = true;
+    btnEl.textContent = 'Starting…';
+    setExportStatus('');
+
+    const headers = {};
+    if (CSRF_TOKEN && CSRF_HEADER) headers[CSRF_HEADER] = CSRF_TOKEN;
+
+    try {
+      const res = await fetch(CTX + 'reconciliations/' + RECONCILIATION_ID + '/export/' + format + '/jobs', {
+        method: 'POST',
+        headers
+      });
+      if (!res.ok) throw new Error('Could not start export (HTTP ' + res.status + ')');
+      const job = await res.json();
+      pollExportJob(job.jobId, btnEl, originalLabel);
+    } catch (e) {
+      btnEl.textContent = 'Export failed';
+      setExportStatus(e.message || 'Could not start export');
+      setTimeout(() => { btnEl.disabled = false; btnEl.textContent = originalLabel; }, 3000);
+    }
+  }
+
+  async function pollExportJob(jobId, btnEl, originalLabel){
+    try {
+      const res = await fetch(CTX + 'exports/jobs/' + jobId);
+      if (!res.ok) throw new Error('Lost track of export job');
+      const job = await res.json();
+
+      if (job.status === 'COMPLETED') {
+        btnEl.textContent = originalLabel;
+        btnEl.disabled = false;
+        const rows = job.totalMatching >= 0 ? job.totalMatching.toLocaleString() : '';
+        setExportStatus('Ready — ' + rows + ' rows' + (job.truncated ? ' (PDF truncated to first 5,000 — use Excel for the full batch)' : ''));
+        window.location = CTX + 'exports/jobs/' + jobId + '/download';
+        return;
+      }
+
+      if (job.status === 'FAILED') {
+        btnEl.textContent = originalLabel;
+        btnEl.disabled = false;
+        setExportStatus('Export failed: ' + (job.errorMessage || 'unknown error'));
+        return;
+      }
+
+      const rowsLabel = job.totalMatching >= 0 ? ' — ' + job.totalMatching.toLocaleString() + ' matching rows' : '';
+      btnEl.textContent = 'Generating…';
+      setExportStatus((job.status === 'QUEUED' ? 'Queued' : 'Generating') + rowsLabel);
+      setTimeout(() => pollExportJob(jobId, btnEl, originalLabel), 1500);
+    } catch (e) {
+      setTimeout(() => pollExportJob(jobId, btnEl, originalLabel), 3000);
+    }
+  }
+</script>
+</body>
+</html>

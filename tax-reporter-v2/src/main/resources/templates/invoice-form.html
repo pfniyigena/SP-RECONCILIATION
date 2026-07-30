@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title th:text="${isEdit} ? 'Edit Invoice — Tax Reporter' : 'New Invoice — Tax Reporter'">New Invoice</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<style>
+  .form-card{background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);padding:24px 26px 26px;max-width:960px;}
+  .form-section-title{
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13.5px;color:var(--ink);
+    text-transform:uppercase;letter-spacing:0.05em;padding-bottom:8px;margin:0 0 16px;border-bottom:1px solid var(--line);
+  }
+  .form-section + .form-section{margin-top:26px;}
+  .form-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;}
+  .field{display:flex;flex-direction:column;gap:6px;min-width:0;}
+  .field.span-2{grid-column:span 2;}
+  .field label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-soft);font-weight:600;}
+  .field .hint{font-size:11px;color:var(--ink-faint);font-weight:400;text-transform:none;letter-spacing:0;}
+  .field input, .field textarea{
+    font-family:'Inter',sans-serif;font-size:13.8px;color:var(--ink);
+    border:1px solid var(--line-strong);border-radius:var(--radius);
+    padding:9px 11px;background:#fff;width:100%;
+  }
+  .field textarea{resize:vertical;min-height:70px;font-family:'IBM Plex Mono',monospace;font-size:12.8px;}
+  .field input.mono{font-family:'IBM Plex Mono',monospace;}
+  .field-error{border-color:var(--red) !important;}
+  .error-text{font-size:11.5px;color:var(--red);font-family:'Inter',sans-serif;font-weight:500;}
+
+  .checkbox-row{display:flex;gap:22px;align-items:center;padding-top:4px;}
+  .checkbox-field{display:flex;align-items:center;gap:8px;}
+  .checkbox-field label{font-size:12.8px;color:var(--ink);font-weight:500;text-transform:none;letter-spacing:0;}
+  .checkbox-field input{width:16px;height:16px;}
+
+  .form-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:26px;padding-top:18px;border-top:1px solid var(--line);}
+  .alert-error-banner{
+    background:var(--red-bg);color:#8A3222;border:1px solid #E0BDB2;border-radius:var(--radius);
+    padding:11px 14px;margin-bottom:18px;font-size:13px;
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <aside th:replace="~{fragments/nav :: sidebar(active='invoices')}"></aside>
+
+  <main class="main">
+
+  <header class="topbar">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <button class="menu-toggle" type="button" aria-label="Toggle menu">☰</button>
+      <div>
+        <h1 th:text="${isEdit} ? 'Edit Invoice' : 'New Invoice'">New Invoice</h1>
+        <span class="sub" th:if="${isEdit}">Editing record #<span th:text="${form.id}">1024</span></span>
+        <span class="sub" th:unless="${isEdit}">Record a fiscal invoice manually</span>
+      </div>
+    </div>
+    <a class="btn btn-ghost" th:href="@{/invoices}">← Back to ledger</a>
+  </header>
+
+  <div class="form-card">
+
+    <form th:action="${isEdit} ? @{/invoices/{id}/edit(id=${form.id})} : @{/invoices}"
+          th:object="${form}" method="post">
+
+      <div class="alert-error-banner" th:if="${#fields.hasErrors('*')}">
+        Please correct the highlighted fields below before saving.
+      </div>
+
+      <input type="hidden" th:if="${isEdit}" th:field="*{id}">
+
+      <div class="form-section">
+        <div class="form-section-title">Registered business</div>
+        <div class="form-grid">
+          <div class="field">
+            <label for="registeredName">Registered name</label>
+            <input type="text" id="registeredName" th:field="*{registeredName}">
+          </div>
+          <div class="field">
+            <label for="registeredTin">Registered TIN</label>
+            <input type="text" id="registeredTin" class="mono" th:field="*{registeredTin}">
+          </div>
+          <div class="field">
+            <label for="erpCode">ERP code</label>
+            <input type="text" id="erpCode" class="mono" th:field="*{erpCode}">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Client</div>
+        <div class="form-grid">
+          <div class="field">
+            <label for="clientName">Client name</label>
+            <input type="text" id="clientName" th:field="*{clientName}">
+          </div>
+          <div class="field">
+            <label for="clientTin">Client TIN</label>
+            <input type="text" id="clientTin" class="mono" th:field="*{clientTin}">
+          </div>
+          <div class="field">
+            <label for="clientPhone">Client phone</label>
+            <input type="text" id="clientPhone" class="mono" th:field="*{clientPhone}">
+          </div>
+          <div class="field">
+            <label for="plateNumber">Plate number</label>
+            <input type="text" id="plateNumber" class="mono" th:field="*{plateNumber}">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Stamp &amp; receipt</div>
+        <div class="form-grid">
+          <div class="field">
+            <label for="stampDate">Stamp date &amp; time *</label>
+            <input type="datetime-local" id="stampDate" th:field="*{stampDate}"
+                   th:classappend="${#fields.hasErrors('stampDate')} ? 'field-error'">
+            <span class="error-text" th:if="${#fields.hasErrors('stampDate')}" th:errors="*{stampDate}">Required</span>
+          </div>
+          <div class="field">
+            <label for="receiptNumber">Receipt number</label>
+            <input type="number" id="receiptNumber" class="mono" th:field="*{receiptNumber}">
+          </div>
+          <div class="field">
+            <label for="sdcId">SDC ID</label>
+            <input type="text" id="sdcId" class="mono" th:field="*{sdcId}">
+          </div>
+          <div class="field">
+            <label for="stampData">Stamp data</label>
+            <input type="text" id="stampData" class="mono" th:field="*{stampData}"
+                   placeholder="e.g. 00123,45678">
+            <span class="hint">Stored as "counter,signature" — unique per invoice.</span>
+          </div>
+          <div class="field">
+            <label for="stampNumberPreview">Stamp number <span class="hint" style="text-transform:none;">(read-only, derived)</span></label>
+            <input type="text" id="stampNumberPreview" class="mono" disabled style="background:#F3F2EE;color:var(--ink-soft);">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Amounts &amp; payment</div>
+        <div class="form-grid">
+          <div class="field">
+            <label for="totalTaxAmount">Total tax amount</label>
+            <input type="number" step="0.01" id="totalTaxAmount" class="mono" th:field="*{totalTaxAmount}">
+          </div>
+          <div class="field">
+            <label for="totalAmount">Total amount *</label>
+            <input type="number" step="0.01" id="totalAmount" class="mono" th:field="*{totalAmount}"
+                   th:classappend="${#fields.hasErrors('totalAmount')} ? 'field-error'">
+            <span class="error-text" th:if="${#fields.hasErrors('totalAmount')}" th:errors="*{totalAmount}">Required</span>
+          </div>
+          <div class="field">
+            <label for="paidAmount">Paid amount</label>
+            <input type="number" step="0.01" id="paidAmount" class="mono" th:field="*{paidAmount}">
+          </div>
+          <div class="field">
+            <label for="transactionType">Transaction type</label>
+            <input type="text" id="transactionType" th:field="*{transactionType}">
+          </div>
+          <div class="field">
+            <label for="paymentMode">Payment mode</label>
+            <input type="text" id="paymentMode" th:field="*{paymentMode}">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Processing status</div>
+        <div class="checkbox-row" style="margin-bottom:14px;">
+          <div class="checkbox-field">
+            <input type="checkbox" id="processed" th:field="*{processed}">
+            <label for="processed">Processed</label>
+          </div>
+        </div>
+        <div class="field">
+          <label for="failureReason">Failure reason</label>
+          <textarea id="failureReason" th:field="*{failureReason}" placeholder="Leave blank if not failed"></textarea>
+          <span class="hint">Setting this marks the invoice as Failed regardless of the Processed checkbox.</span>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <a class="btn btn-ghost" th:href="${isEdit} ? @{/invoices/{id}(id=${form.id})} : @{/invoices}">Cancel</a>
+        <button type="submit" class="btn btn-primary" th:text="${isEdit} ? 'Save changes' : 'Create invoice'">Create invoice</button>
+      </div>
+    </form>
+  </div>
+
+  </main>
+</div>
+
+<script>
+  // Delegated wiring — no inline onclick/oninput — so this page keeps working
+  // regardless of any Content-Security-Policy the app might set.
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.menu-toggle')) {
+      document.getElementById('sidebar').classList.toggle('open');
+    }
+  });
+
+  document.addEventListener('input', (e) => {
+    if (e.target.id === 'stampData') {
+      updateStampPreview();
+    }
+  });
+
+  // Mirrors TaxReporterInvoice.getStampNumber(): stampData is "counter,signature",
+  // derived stamp number is those two parts joined with "/". Live preview only —
+  // the server is the source of truth and recomputes this from stampData on every read.
+  function updateStampPreview(){
+    const raw = document.getElementById('stampData').value;
+    const preview = document.getElementById('stampNumberPreview');
+    if (!raw || !raw.trim()) {
+      preview.value = '';
+      return;
+    }
+    const commaIndex = raw.indexOf(',');
+    if (commaIndex === -1) {
+      preview.value = '(not enough data yet — expects "counter,signature")';
+      return;
+    }
+    preview.value = raw.slice(0, commaIndex) + '/' + raw.slice(commaIndex + 1);
+  }
+  document.addEventListener('DOMContentLoaded', updateStampPreview);
+</script>
+</body>
+</html>

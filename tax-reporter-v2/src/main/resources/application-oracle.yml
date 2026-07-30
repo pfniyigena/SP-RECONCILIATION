@@ -1,0 +1,31 @@
+# Active via: -Dspring.profiles.active=oracle (or SPRING_PROFILES_ACTIVE=oracle) at RUNTIME.
+# Building with `mvn package -Poracle` alone does NOT activate this — that Maven profile only
+# renames the jar (see pom.xml's <profiles> section and its comment for why) and does not wire
+# spring.profiles.active into the running app on its own.
+#
+# SCAFFOLD ONLY, properties-only: this configures where an Oracle datasource WOULD connect, but
+# there is no OracleJdbcConfig.java (or equivalent DataSource bean) in this project yet to
+# actually read these properties — mentioned earlier in this project's history as belonging to
+# the real app, never built here. This file existing does nothing on its own; a person adding
+# it needs to also add a config class shaped like stamp.config.StampJdbcConfig (same
+# DataSourceBuilder + @ConfigurationProperties("spring.datasource.oracle") pattern, same
+# jdbc-url-not-url caveat, same PrimaryDataSourceConfig consideration — a second/third
+# DataSource bean existing again means Spring Boot's own primary-datasource auto-configuration
+# backs off unless PrimaryDataSourceConfig (already in this project) is still present, which it
+# is, so that specific failure mode is already covered if/when this gets wired up).
+#
+# Values below are placeholders, not real Oracle connection details — I don't have your actual
+# Oracle host, service name, or credentials.
+spring:
+  datasource:
+    oracle:
+      jdbc-url: ${ORACLE_DB_URL:jdbc:oracle:thin:@localhost:1521/ORCLPDB1}
+      username: ${ORACLE_DB_USERNAME:changeme}
+      password: ${ORACLE_DB_PASSWORD:changeme}
+      pool-name: OracleDbPool
+      maximum-pool-size: 5
+      minimum-idle: 0
+      connection-timeout: 8000
+      max-lifetime: 1800000
+      idle-timeout: 30000
+      initialization-fail-timeout: -1

@@ -1,0 +1,69 @@
+<!-- fragments/crud-styles.html : shared styles for simple list+form CRUD screens -->
+<th:block xmlns:th="http://www.thymeleaf.org" th:fragment="crud">
+<style>
+  .crud-topbar{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:18px;}
+  .crud-search{display:flex;gap:10px;}
+  .crud-search input{
+    width:280px;max-width:60vw;font-family:'IBM Plex Mono',monospace;font-size:13px;
+    border:1px solid var(--line-strong);border-radius:var(--radius);padding:8px 10px;background:#fff;
+  }
+  .crud-count{font-size:12.5px;color:var(--ink-soft);margin-bottom:10px;}
+
+  .crud-table-wrap{background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;overflow-x:auto;}
+  .crud-table{width:100%;border-collapse:collapse;min-width:640px;}
+  .crud-table thead th{
+    background:var(--ink);color:#EFEDE6;text-align:left;font-size:10.5px;text-transform:uppercase;
+    letter-spacing:0.06em;padding:11px 14px;font-weight:600;white-space:nowrap;
+  }
+  .crud-table tbody td{padding:10px 14px;border-bottom:1px solid var(--line);font-size:13.2px;vertical-align:middle;}
+  .crud-table tbody tr:nth-child(even){background:#FBFAF7;}
+  .crud-table tbody tr:hover{background:var(--green-bg);}
+  .crud-table td.mono{font-family:'IBM Plex Mono',monospace;font-size:12.6px;}
+
+  .crud-actions{white-space:nowrap;}
+  .crud-actions a, .crud-actions button{
+    font-family:'Inter',sans-serif;font-size:12.5px;font-weight:600;text-decoration:none;
+    background:none;border:none;cursor:pointer;padding:0;
+  }
+  .crud-actions .edit-link{color:var(--ink-soft);}
+  .crud-actions .edit-link:hover{color:var(--ink);}
+  .crud-actions .delete-link{color:var(--red);margin-left:12px;}
+  .crud-actions .delete-link:hover{text-decoration:underline;}
+
+  .crud-empty{padding:56px 20px;text-align:center;color:var(--ink-soft);}
+  .crud-empty .glyph{font-family:'IBM Plex Mono',monospace;font-size:26px;color:var(--line-strong);margin-bottom:8px;}
+
+  .badge-enabled{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:var(--green-bg);color:var(--green);}
+  .badge-disabled{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:var(--red-bg);color:var(--red);}
+
+  .crud-pagination{display:flex;justify-content:space-between;align-items:center;padding:14px 2px 0;font-size:12.5px;color:var(--ink-soft);}
+  .crud-pagination .pages{display:flex;gap:4px;}
+  .crud-pagination .page-link{
+    min-width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;
+    border:1px solid var(--line-strong);border-radius:var(--radius);text-decoration:none;
+    color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:12px;background:#fff;
+  }
+  .crud-pagination .page-link.current{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:600;}
+  .crud-pagination .page-link.disabled{opacity:0.35;pointer-events:none;}
+
+  .crud-form-card{background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);padding:24px 26px 26px;max-width:760px;}
+  .crud-form-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;}
+  .crud-field{display:flex;flex-direction:column;gap:6px;min-width:0;}
+  .crud-field label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-soft);font-weight:600;}
+  .crud-field input, .crud-field select{
+    font-family:'Inter',sans-serif;font-size:13.8px;color:var(--ink);
+    border:1px solid var(--line-strong);border-radius:var(--radius);padding:9px 11px;background:#fff;width:100%;
+  }
+  .crud-field input.mono{font-family:'IBM Plex Mono',monospace;}
+  .crud-field .field-error{border-color:var(--red) !important;}
+  .crud-field .error-text{font-size:11.5px;color:var(--red);font-family:'Inter',sans-serif;font-weight:500;}
+  .crud-field .hint{font-size:11px;color:var(--ink-faint);font-weight:400;text-transform:none;}
+  .crud-checkbox-field{display:flex;align-items:center;gap:8px;}
+  .crud-checkbox-field label{font-size:12.8px;color:var(--ink);font-weight:500;text-transform:none;letter-spacing:0;}
+  .crud-checkbox-field input{width:16px;height:16px;}
+
+  .crud-form-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:24px;padding-top:16px;border-top:1px solid var(--line);}
+  .alert-error-banner{background:var(--red-bg);color:#8A3222;border:1px solid #E0BDB2;border-radius:var(--radius);padding:11px 14px;margin-bottom:18px;font-size:13px;}
+  .crud-flash{background:var(--green-bg);color:#215044;border:1px solid #BFDBD1;border-radius:var(--radius);padding:11px 14px;margin-bottom:16px;font-size:13px;max-width:760px;}
+</style>
+</th:block>

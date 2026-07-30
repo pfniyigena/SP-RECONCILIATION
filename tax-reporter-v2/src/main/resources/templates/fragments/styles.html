@@ -1,0 +1,105 @@
+<!-- fragments/styles.html : shared design tokens + sidebar/topbar, th:replace this into <head> -->
+<th:block xmlns:th="http://www.thymeleaf.org" th:fragment="base">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F7F6F2;
+    --paper-raised:#FFFFFF;
+    --ink:#1C2333;
+    --ink-2:#252E42;
+    --ink-soft:#5B6478;
+    --ink-faint:#95A0B3;
+    --line:#DEDBD3;
+    --line-strong:#C7C3B8;
+    --green:#2F6F5E;
+    --green-bg:#E7F0EC;
+    --red:#B0402D;
+    --red-bg:#F5E9E5;
+    --amber:#B8862E;
+    --amber-bg:#F6EEDD;
+    --focus:#2F6F5E;
+    --radius:3px;
+    --sidebar-w:236px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;font-size:14px;}
+  a{color:inherit;}
+  ::selection{background:var(--amber-bg);}
+  .btn{
+    font-family:'Inter',sans-serif;font-weight:600;font-size:13px;
+    border-radius:var(--radius);padding:9px 16px;border:1px solid transparent;
+    cursor:pointer;white-space:nowrap;
+  }
+  .btn-primary{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .btn-primary:hover{background:#0f1420;}
+  .btn-ghost{background:transparent;color:var(--ink-soft);border-color:var(--line-strong);}
+  .btn-ghost:hover{color:var(--ink);border-color:var(--ink-soft);}
+  .btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px;}
+  input:focus,select:focus{outline:2px solid var(--focus);outline-offset:1px;border-color:var(--focus);}
+
+  /* ---------- App shell: sidebar + main ---------- */
+  .shell{display:flex;min-height:100vh;}
+  .sidebar{
+    width:var(--sidebar-w);flex:0 0 var(--sidebar-w);
+    background:var(--ink);color:#D9DCE4;
+    display:flex;flex-direction:column;
+    position:sticky;top:0;height:100vh;
+  }
+  .sidebar-brand{padding:22px 20px 18px;border-bottom:1px solid rgba(255,255,255,0.09);}
+  .sidebar-brand .mark{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16.5px;color:#fff;letter-spacing:-0.01em;}
+  .sidebar-brand .tag{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#8891A6;letter-spacing:0.06em;text-transform:uppercase;margin-top:3px;}
+
+  .nav-group{padding:14px 10px 10px;flex:1;overflow-y:auto;}
+  .nav-section{padding-bottom:6px;margin-bottom:6px;}
+  .nav-section + .nav-section{border-top:1px solid rgba(255,255,255,0.09);padding-top:12px;}
+  .nav-label{font-size:10px;text-transform:uppercase;letter-spacing:0.09em;color:#8891A6;font-weight:700;padding:0 10px 8px;}
+  .nav-item{
+    display:flex;align-items:center;gap:10px;
+    padding:9px 12px;margin-bottom:3px;border-radius:var(--radius);
+    text-decoration:none;color:#C7CCDA;font-size:13.3px;font-weight:500;
+    border-left:2px solid transparent;
+  }
+  .nav-item .glyph{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#7B84A0;width:16px;text-align:center;}
+  .nav-item:hover{background:rgba(255,255,255,0.06);color:#fff;}
+  .nav-item.active{background:rgba(47,111,94,0.26);border-left-color:var(--green);color:#fff;font-weight:600;}
+  .nav-item.active .glyph{color:#8FCBB8;}
+
+  .sidebar-foot{border-top:1px solid rgba(255,255,255,0.09);padding:14px 16px;}
+  .user-chip{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .user-avatar{
+    width:30px;height:30px;border-radius:50%;background:var(--amber-bg);color:#7A5A1E;
+    display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;
+    font-weight:700;font-size:12.5px;flex:0 0 auto;
+  }
+  .user-meta .name{font-size:12.8px;font-weight:600;color:#fff;line-height:1.2;}
+  .user-meta .role{font-size:10.8px;color:#8891A6;}
+  .logout-form{margin:0;}
+  .logout-link{
+    display:flex;align-items:center;gap:8px;width:100%;background:none;border:1px solid rgba(255,255,255,0.14);
+    color:#C7CCDA;font-family:'Inter',sans-serif;font-size:12.5px;font-weight:600;
+    padding:8px 10px;border-radius:var(--radius);cursor:pointer;text-decoration:none;justify-content:center;
+  }
+  .logout-link:hover{border-color:var(--red);color:#E7B7AA;}
+
+  /* ---------- Topbar (inside main) ---------- */
+  .topbar{display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--ink);padding-bottom:14px;margin-bottom:22px;}
+  .topbar h1{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:22px;letter-spacing:-0.01em;margin:0;}
+  .topbar .sub{font-size:12.5px;color:var(--ink-soft);}
+  .topbar .stamp{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-faint);text-align:right;line-height:1.5;}
+
+  .main{flex:1;min-width:0;padding:28px 32px 60px;}
+
+  @media (max-width: 900px){
+    .sidebar{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform 0.2s ease;z-index:50;box-shadow:2px 0 12px rgba(0,0,0,0.25);}
+    .sidebar.open{transform:translateX(0);}
+    .main{padding:16px;}
+    .menu-toggle{display:inline-flex;}
+  }
+  .menu-toggle{
+    display:none;align-items:center;justify-content:center;
+    width:34px;height:34px;border-radius:var(--radius);border:1px solid var(--line-strong);
+    background:#fff;cursor:pointer;margin-right:10px;
+  }
+</style>
+</th:block>

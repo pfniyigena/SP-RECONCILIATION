@@ -1,0 +1,117 @@
+server:
+  port: 6060
+  servlet:
+    context-path: /tax-reporter
+
+spring:
+  application:
+    name: tax-reporter
+
+  # Fallback only, not a hard override — spring.profiles.default is used ONLY when nothing
+  # else specifies an active profile (no -Dspring.profiles.active, no SPRING_PROFILES_ACTIVE
+  # env var, no spring.profiles.active elsewhere in config). Deliberately not
+  # spring.profiles.active here, which would hard-code "dev" and make it impossible for the
+  # sp/oracle Maven build profiles (see pom.xml) or a real deployment to actually take effect
+  # by setting spring.profiles.active themselves — this way "dev" is just what you get by
+  # default with no further setup, not something that fights an explicit choice elsewhere.
+  profiles:
+    default: dev
+
+  datasource:
+    url: jdbc:postgresql://localhost:5434/tax_reporter_card1
+    username: postgres
+    password: ${DB_PASSWORD:npf2020.}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: PostgresPool
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      max-lifetime: 1800000
+      idle-timeout: 30000
+      leak-detection-threshold: 30000
+
+    # Secondary datasource: SQL Server, read-only lookup against the external Stamp table
+    # (StampLookupService / StampJdbcConfig). Nested under spring.datasource.stamp — same
+    # convention as spring.datasource.oracle (OracleJdbcConfig) — rather than a standalone
+    # top-level key. Spring Boot's primary-datasource binding (url/username/password/driver-
+    # class-name/hikari.* directly under spring.datasource above) only recognizes properties
+    # matching its own known fields, so an extra sibling block like this one is silently
+    # ignored by that binding rather than conflicting with it.
+    #
+    # Flat structure directly under "stamp" (not further nested under a second "hikari:" key)
+    # on purpose: this binds via @ConfigurationProperties("spring.datasource.stamp") straight
+    # onto the HikariDataSource DataSourceBuilder produces in StampJdbcConfig, which exposes
+    # jdbc-url/username/password AND all pool-tuning setters as one flat JavaBean. Also: this
+    # is jdbc-url, not url — HikariDataSource has setJdbcUrl(), not setUrl(), and
+    # @ConfigurationProperties bound directly onto the built object (rather than through
+    # Spring's own DataSourceProperties/initializeDataSourceBuilder() indirection) does NOT
+    # get any "url" -> "jdbc-url" translation; using "url" here would silently fail to bind
+    # with no error at startup. Worth double-checking spring.datasource.oracle.* uses
+    # jdbc-url for the same reason, since OracleJdbcConfig binds the same way.
+    stamp:
+      jdbc-url: ${STAMP_DB_URL:jdbc:sqlserver://localhost:1433;databaseName=StampDB;encrypt=true;trustServerCertificate=true}
+      username: ${STAMP_DB_USERNAME:sa}
+      password: ${STAMP_DB_PASSWORD:changeme}
+      # Deliberately small — this is a single-row lookup path (CustomerDeposit fetch-stamp-data
+      # action), not a bulk/high-throughput one, so it doesn't need or deserve a pool anywhere
+      # near the size of the primary Postgres one above; keeping it small also limits how many
+      # connections a SQL Server outage/slowdown can leave hanging against this app.
+      pool-name: StampDbPool
+      maximum-pool-size: 3
+      minimum-idle: 0
+      connection-timeout: 8000
+      max-lifetime: 1800000
+      idle-timeout: 30000
+      read-only: true
+      # Postgres (above) is the primary datasource — SQL Server is a secondary, optional
+      # integration (StampLookupService), and its unavailability must never block the whole
+      # app from starting. By default, HikariCP tries to establish one real connection while
+      # the pool itself is being created, and throws PoolInitializationException — which kills
+      # Spring's application context — if that fails. A negative initializationFailTimeout
+      # tells Hikari to skip that startup probe entirely: the pool comes up regardless of
+      # whether SQL Server is reachable, and a connection is only actually attempted the first
+      # time something really uses it — which StampLookupService already handles gracefully,
+      # catching the failure and surfacing it as a StampLookupException with a clear message,
+      # rather than a raw connection exception.
+      initialization-fail-timeout: -1
+
+  jpa:
+    hibernate:
+      # NOTE: 'update' is convenient to get started, but is not safe for production.
+      # Switch to 'validate' and manage schema changes with Flyway/Liquibase once
+      # this app is running against real data.
+      ddl-auto: update
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+
+  thymeleaf:
+    cache: false
+
+  jackson:
+    time-zone: Africa/Kigali
+
+# CustomerDepositMatchingService's scheduled run — same action as the "Run Now" button on the
+# Jobs page and the "Run Matching" button on the Deposits list, just on a timer. Default: every
+# 15 minutes. Cron format is second-minute-hour-day-month-weekday (Spring's, six fields).
+deposit-matching:
+  cron:
+    expression: ${DEPOSIT_MATCHING_CRON:0 */15 * * * *}
+
+logging:
+  level:
+    org.hibernate.SQL: WARN
+    nika.tax.reporter: INFO
+
+app:
+  timezone: Africa/Kigali
+  # Created automatically on first boot if no users exist yet — change this password immediately after first login.
+  default-admin:
+    username: admin
+    password: ${DEFAULT_ADMIN_PASSWORD:admin123}

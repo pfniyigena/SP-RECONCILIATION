@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title th:text="${isEdit} ? 'Edit Customer — Tax Reporter' : 'New Customer — Tax Reporter'">New Customer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<th:block th:replace="~{fragments/crud-styles :: crud}"></th:block>
+</head>
+<body>
+<div class="shell">
+  <aside th:replace="~{fragments/nav :: sidebar(active='customers')}"></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1 th:text="${isEdit} ? 'Edit Customer' : 'New Customer'">New Customer</h1>
+        <span class="sub" th:unless="${isEdit}">Register a new customer record</span>
+        <span class="sub" th:if="${isEdit}">Editing customer</span>
+      </div>
+      <a class="btn btn-ghost" th:href="@{/customers}">← Back to customers</a>
+    </header>
+
+    <div class="crud-flash" th:if="${flashMessage}" th:text="${flashMessage}">Saved.</div>
+
+    <div class="crud-form-card">
+      <form th:action="${isEdit} ? @{/customers/{id}/edit(id=${form.id})} : @{/customers}" th:object="${form}" method="post">
+        <div class="alert-error-banner" th:if="${#fields.hasErrors('*')}">
+          Please correct the highlighted fields below before saving.
+        </div>
+        <input type="hidden" th:if="${isEdit}" th:field="*{id}">
+
+        <div class="crud-form-grid">
+          <div class="crud-field">
+            <label for="clientName">Client name *</label>
+            <input type="text" id="clientName" th:field="*{clientName}"
+                   th:classappend="${#fields.hasErrors('clientName')} ? 'field-error'">
+            <span class="error-text" th:if="${#fields.hasErrors('clientName')}" th:errors="*{clientName}">Required</span>
+          </div>
+          <div class="crud-field">
+            <label for="clientTin">Client TIN</label>
+            <input type="text" id="clientTin" class="mono" th:field="*{clientTin}">
+          </div>
+          <div class="crud-field">
+            <label for="clientId">Client ID <span class="hint" style="text-transform:none;">(legacy)</span></label>
+            <input type="number" id="clientId" class="mono" th:field="*{clientId}">
+          </div>
+        </div>
+
+        <div class="crud-checkbox-field" style="margin-top:18px;">
+          <input type="checkbox" id="enabled" th:field="*{enabled}">
+          <label for="enabled">Enabled</label>
+        </div>
+        <div class="crud-checkbox-field" style="margin-top:10px;">
+          <input type="checkbox" id="allocated" th:field="*{allocated}">
+          <label for="allocated">Allocated <span class="hint" style="text-transform:none;">(eligible for deposit-matching)</span></label>
+        </div>
+
+        <div class="crud-form-actions">
+          <a class="btn btn-ghost" th:href="@{/customers}">Cancel</a>
+          <button type="submit" class="btn btn-primary" th:text="${isEdit} ? 'Save changes' : 'Create customer'">Create customer</button>
+        </div>
+      </form>
+    </div>
+  </main>
+</div>
+</body>
+</html>

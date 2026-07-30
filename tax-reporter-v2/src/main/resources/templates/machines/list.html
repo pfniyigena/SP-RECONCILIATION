@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title>Terminal Machines — Tax Reporter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<th:block th:replace="~{fragments/crud-styles :: crud}"></th:block>
+</head>
+<body>
+<div class="shell">
+  <aside th:replace="~{fragments/nav :: sidebar(active='machines')}"></aside>
+
+  <main class="main">
+    <div class="crud-topbar">
+      <div>
+        <h1 style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:22px;margin:0;">Terminal Machines</h1>
+        <span style="font-size:12.5px;color:var(--ink-soft);">POS / terminal devices, optionally linked to a stamp machine</span>
+      </div>
+      <a class="btn btn-primary" th:href="@{/machines/new}">+ New machine</a>
+    </div>
+
+    <div class="crud-flash" th:if="${flashMessage}" th:text="${flashMessage}">Terminal machine created.</div>
+
+    <form class="crud-search" method="get" th:action="@{/machines}">
+      <input type="text" name="q" placeholder="Search POS name, SDC ID, or location…" th:value="${q}">
+      <button type="submit" class="btn btn-ghost">Search</button>
+      <a class="btn btn-ghost" th:if="${q}" th:href="@{/machines}">Clear</a>
+    </form>
+
+    <div class="crud-count">
+      <span th:text="${#numbers.formatInteger(machines.totalElements, 0, 'COMMA')}">12</span> machine(s)
+    </div>
+
+    <div class="crud-table-wrap">
+      <table class="crud-table">
+        <thead>
+          <tr>
+            <th>POS Name</th>
+            <th>POS #</th>
+            <th>SDC ID</th>
+            <th>Location</th>
+            <th>Stamp Machine</th>
+            <th>Status</th>
+            <th class="crud-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="m : ${machines.content}">
+            <td th:text="${m.posName ?: '—'}">Kigali Fuel Station #4</td>
+            <td class="mono" th:text="${m.posNumber ?: '—'}">4471</td>
+            <td class="mono" th:text="${m.sdcId ?: '—'}">SDC00012345</td>
+            <td th:text="${m.location ?: '—'}">Kigali</td>
+            <td class="mono" th:text="${m.stampMachine != null ? m.stampMachine.serialNumber : '—'}">—</td>
+            <td>
+              <span class="badge-enabled" th:if="${m.enabled == true}">Enabled</span>
+              <span class="badge-disabled" th:if="${m.enabled != true}">Disabled</span>
+            </td>
+            <td class="crud-actions">
+              <a class="edit-link" th:href="@{/machines/{id}/edit(id=${m.id})}">Edit</a>
+              <form th:action="@{/machines/{id}/delete(id=${m.id})}" method="post" class="confirm-submit" style="display:inline;"
+                    data-confirm="Delete this terminal machine? This can't be undone.">
+                <button type="submit" class="delete-link">Delete</button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+        <tbody th:if="${machines.numberOfElements == 0}">
+          <tr>
+            <td colspan="7">
+              <div class="crud-empty">
+                <div class="glyph">— · —</div>
+                No terminal machines match this search.
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="crud-pagination" th:if="${machines.totalPages > 1}">
+      <span>Page <span th:text="${machines.number + 1}">1</span> of <span th:text="${machines.totalPages}">3</span></span>
+      <div class="pages">
+        <a class="page-link" th:classappend="${machines.first} ? 'disabled'"
+           th:href="@{/machines(q=${q},page=${machines.number - 1})}">‹</a>
+        <a class="page-link" th:classappend="${machines.last} ? 'disabled'"
+           th:href="@{/machines(q=${q},page=${machines.number + 1})}">›</a>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Delegated wiring — no inline onsubmit — so this page keeps working
+  // regardless of any Content-Security-Policy the app might set.
+  document.addEventListener('submit', (e) => {
+    if (e.target.matches('.confirm-submit')) {
+      if (!confirm(e.target.dataset.confirm || 'Are you sure?')) {
+        e.preventDefault();
+      }
+    }
+  });
+</script>
+</body>
+</html>

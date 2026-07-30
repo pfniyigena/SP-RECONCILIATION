@@ -1,0 +1,132 @@
+<!-- fragments/dropdown.html : shared multi-select checkbox-dropdown (styles + behavior) -->
+<th:block xmlns:th="http://www.thymeleaf.org" th:fragment="styles">
+<style>
+  .checkbox-dropdown{position:relative;}
+  .dropdown-toggle{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;
+    font-family:'Inter',sans-serif;font-size:13.5px;color:var(--ink);
+    border:1px solid var(--line-strong);border-radius:var(--radius);
+    padding:8px 10px;background:#fff;cursor:pointer;text-align:left;
+  }
+  .dropdown-toggle:hover{border-color:var(--ink-soft);}
+  .dropdown-toggle .chevron{color:var(--ink-faint);font-size:11px;}
+  .dropdown-panel{
+    position:absolute;top:calc(100% + 4px);left:0;z-index:10;
+    width:280px;max-width:80vw;background:#fff;border:1px solid var(--line-strong);border-radius:var(--radius);
+    box-shadow:0 12px 28px -12px rgba(28,35,51,0.35);padding:10px;
+  }
+  .dropdown-search{
+    width:100%;font-family:'Inter',sans-serif;font-size:13px;
+    border:1px solid var(--line);border-radius:var(--radius);padding:7px 9px;margin-bottom:8px;
+  }
+  .dropdown-actions{display:flex;gap:8px;margin-bottom:8px;}
+  .dropdown-actions button{
+    font-family:'Inter',sans-serif;font-size:11.5px;font-weight:600;color:var(--green);
+    background:none;border:none;cursor:pointer;padding:2px 0;
+  }
+  .dropdown-actions button:hover{text-decoration:underline;}
+  .dropdown-list{max-height:220px;overflow-y:auto;border-top:1px solid var(--line);padding-top:6px;}
+  .dropdown-option{
+    display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:var(--radius);
+    font-size:13px;color:var(--ink);cursor:pointer;
+  }
+  .dropdown-option:hover{background:var(--paper);}
+  .dropdown-option[hidden]{display:none;}
+  .dropdown-option input{width:15px;height:15px;flex:0 0 auto;}
+  .dropdown-option-empty{font-size:12.5px;color:var(--ink-faint);padding:10px 4px;text-align:center;}
+</style>
+</th:block>
+
+<!--
+  JS is delegated (no inline onclick/oninput) so it works regardless of any
+  Content-Security-Policy the app might set — see the note in transactions.html
+  for the incident that made this the required pattern for interactive controls.
+-->
+<th:block xmlns:th="http://www.thymeleaf.org" th:fragment="script">
+<script>
+  document.addEventListener('click', (e) => {
+    const toggleBtn = e.target.closest('.dropdown-toggle');
+    if (toggleBtn) {
+      e.stopPropagation();
+      const panel = toggleBtn.closest('.checkbox-dropdown').querySelector('.dropdown-panel');
+      panel.hidden = !panel.hidden;
+      return;
+    }
+
+    const actionBtn = e.target.closest('.dropdown-actions button[data-action]');
+    if (actionBtn) {
+      e.stopPropagation();
+      setAllDropdownCheckboxes(actionBtn.closest('.checkbox-dropdown'), actionBtn.dataset.action === 'select-all');
+      return;
+    }
+
+    if (e.target.closest('.dropdown-panel')) {
+      e.stopPropagation();
+      return;
+    }
+
+    document.querySelectorAll('.checkbox-dropdown').forEach(container => {
+      const panel = container.querySelector('.dropdown-panel');
+      if (panel && !panel.hidden && !container.contains(e.target)) {
+        panel.hidden = true;
+      }
+    });
+  });
+
+  document.addEventListener('input', (e) => {
+    if (e.target.matches('.dropdown-search')) {
+      filterDropdownOptions(e.target);
+    }
+  });
+
+  document.addEventListener('change', (e) => {
+    if (e.target.matches('.dropdown-option input[type="checkbox"]')) {
+      updateDropdownLabelForContainer(e.target.closest('.checkbox-dropdown'));
+    }
+  });
+
+  function filterDropdownOptions(input){
+    const container = input.closest('.checkbox-dropdown');
+    const q = input.value.trim().toLowerCase();
+    const options = container.querySelectorAll('.dropdown-option');
+    let visibleCount = 0;
+    options.forEach(opt => {
+      const matches = opt.textContent.toLowerCase().includes(q);
+      opt.hidden = !matches;
+      if (matches) visibleCount++;
+    });
+    const empty = container.querySelector('.dropdown-option-empty');
+    if (empty) {
+      empty.querySelector('.search-echo').textContent = input.value;
+      empty.hidden = visibleCount > 0 || q === '';
+    }
+  }
+
+  function setAllDropdownCheckboxes(container, checked){
+    container.querySelectorAll('.dropdown-option input[type="checkbox"]').forEach(cb => {
+      if (!cb.closest('.dropdown-option').hidden) {
+        cb.checked = checked;
+      }
+    });
+    updateDropdownLabelForContainer(container);
+  }
+
+  function updateDropdownLabelForContainer(container){
+    const checked = Array.from(container.querySelectorAll('.dropdown-option input[type="checkbox"]')).filter(cb => cb.checked);
+    const label = container.querySelector('.dropdown-label');
+    const allLabel = container.dataset.allLabel || 'All';
+    const noun = container.dataset.noun || 'selected';
+    if (checked.length === 0) {
+      label.textContent = allLabel;
+    } else if (checked.length === 1) {
+      label.textContent = checked[0].closest('.dropdown-option').querySelector('span').textContent.trim();
+    } else {
+      label.textContent = checked.length + ' ' + noun;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.checkbox-dropdown').forEach(updateDropdownLabelForContainer);
+  });
+</script>
+</th:block>

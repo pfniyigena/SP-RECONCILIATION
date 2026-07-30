@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+<meta charset="UTF-8">
+<title>Transaction Ledger — Tax Reporter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="_csrf" th:if="${_csrf}" th:content="${_csrf.token}">
+<meta name="_csrf_header" th:if="${_csrf}" th:content="${_csrf.headerName}">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<style>
+  /* page-specific styles for the transactions table (tokens/sidebar/topbar come from fragments/styles) */
+
+  /* ---------- Filter panel ---------- */
+  .flash-banner{
+    background:var(--green-bg);color:#215044;border:1px solid #BFDBD1;border-radius:var(--radius);
+    padding:11px 14px;margin-bottom:16px;font-size:13px;
+  }
+  .filters{background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:18px;}
+  .filters-row{display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:14px;padding:16px 18px;align-items:end;}
+  .filters-row .search-field{grid-column:1 / -1;}
+  @media (min-width: 1180px){
+    .filters-row .search-field{grid-column:span 2;}
+  }
+  .filters-actions{display:flex;gap:10px;grid-column:1 / -1;justify-content:flex-end;padding-top:2px;}
+  @media (min-width: 780px){
+    .filters-actions{grid-column:auto;justify-content:flex-start;}
+  }
+  .field{display:flex;flex-direction:column;gap:5px;min-width:0;}
+  .field label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-soft);font-weight:600;}
+  .field input,.field select{
+    font-family:'Inter',sans-serif;font-size:13.5px;color:var(--ink);
+    border:1px solid var(--line-strong);border-radius:var(--radius);
+    padding:8px 10px;background:#fff;width:100%;
+  }
+  .field input[type="date"]{font-family:'IBM Plex Mono',monospace;font-size:12.5px;}
+  .search-field input{font-family:'IBM Plex Mono',monospace;}
+
+  .active-filters{display:flex;flex-wrap:wrap;gap:8px;padding:0 18px 14px;}
+
+  /* ---------- Checkbox dropdown filters (machine, customer, ...) ---------- */
+  .checkbox-dropdown{position:relative;}
+  .dropdown-toggle{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;
+    font-family:'Inter',sans-serif;font-size:13.5px;color:var(--ink);
+    border:1px solid var(--line-strong);border-radius:var(--radius);
+    padding:8px 10px;background:#fff;cursor:pointer;text-align:left;
+  }
+  .dropdown-toggle:hover{border-color:var(--ink-soft);}
+  .dropdown-toggle .chevron{color:var(--ink-faint);font-size:11px;}
+  .dropdown-panel{
+    position:absolute;top:calc(100% + 4px);left:0;z-index:10;
+    width:280px;max-width:80vw;background:#fff;border:1px solid var(--line-strong);border-radius:var(--radius);
+    box-shadow:0 12px 28px -12px rgba(28,35,51,0.35);padding:10px;
+  }
+  .dropdown-search{
+    width:100%;font-family:'Inter',sans-serif;font-size:13px;
+    border:1px solid var(--line);border-radius:var(--radius);padding:7px 9px;margin-bottom:8px;
+  }
+  .dropdown-actions{display:flex;gap:8px;margin-bottom:8px;}
+  .dropdown-actions button{
+    font-family:'Inter',sans-serif;font-size:11.5px;font-weight:600;color:var(--green);
+    background:none;border:none;cursor:pointer;padding:2px 0;
+  }
+  .dropdown-actions button:hover{text-decoration:underline;}
+  .dropdown-list{max-height:220px;overflow-y:auto;border-top:1px solid var(--line);padding-top:6px;}
+  .dropdown-option{
+    display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:var(--radius);
+    font-size:13px;color:var(--ink);cursor:pointer;
+  }
+  .dropdown-option:hover{background:var(--paper);}
+  .dropdown-option[hidden]{display:none;}
+  .dropdown-option input{width:15px;height:15px;flex:0 0 auto;}
+  .dropdown-option-empty{font-size:12.5px;color:var(--ink-faint);padding:10px 4px;text-align:center;}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;
+    background:var(--amber-bg);color:#7A5A1E;border:1px solid #E3CE9C;
+    font-size:12px;font-family:'IBM Plex Mono',monospace;
+    padding:4px 8px 4px 10px;border-radius:20px;
+  }
+  .chip a{color:#7A5A1E;text-decoration:none;font-weight:700;font-size:13px;line-height:1;padding-left:2px;}
+  .chip a:hover{color:var(--red);}
+
+  /* ---------- Result meta bar ---------- */
+  .result-bar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 2px 10px;color:var(--ink-soft);font-size:12.5px;}
+  .result-bar .count strong{color:var(--ink);font-family:'IBM Plex Mono',monospace;}
+
+  .reconcile-toolbar{
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    background:var(--amber-bg);border:1px solid #E3CE9C;border-radius:var(--radius);
+    padding:10px 14px;margin-bottom:10px;font-size:12.5px;color:#7A5A1E;
+  }
+  .reconcile-toolbar label{font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.04em;}
+  .reconcile-toolbar input[type="date"], .reconcile-toolbar input[type="text"]{
+    font-family:'IBM Plex Mono',monospace;font-size:12.5px;border:1px solid #E3CE9C;
+    border-radius:var(--radius);padding:6px 8px;background:#fff;
+  }
+  .reconcile-toolbar .count-badge{
+    font-family:'IBM Plex Mono',monospace;font-weight:700;background:#fff;
+    border:1px solid #E3CE9C;border-radius:20px;padding:2px 10px;
+  }
+  .row-select{width:15px;height:15px;}
+  .page-size{display:flex;align-items:center;gap:8px;}
+  .page-size select{font-family:'IBM Plex Mono',monospace;font-size:12.5px;border:1px solid var(--line-strong);border-radius:var(--radius);padding:5px 6px;background:#fff;}
+
+  /* ---------- Table ---------- */
+  .ledger-wrap{background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;}
+  .ledger-scroll{overflow-x:auto;max-height:68vh;overflow-y:auto;}
+  table{width:100%;border-collapse:collapse;min-width:1220px;}
+  thead th{
+    position:sticky;top:0;z-index:2;background:var(--ink);color:#EFEDE6;
+    text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;
+    padding:11px 14px;font-weight:600;border-bottom:2px solid var(--ink);white-space:nowrap;
+  }
+  thead th a{display:inline-flex;align-items:center;gap:5px;color:inherit;text-decoration:none;}
+  thead th a:hover{color:#fff;}
+  .sort-arrow{font-size:10px;opacity:0.85;}
+  thead th.num, tbody td.num{text-align:right;}
+  tbody td{padding:10px 14px;border-bottom:1px solid var(--line);font-size:13.2px;vertical-align:middle;}
+  tbody tr:nth-child(even){background:#FBFAF7;}
+  tbody tr:hover{background:var(--green-bg);}
+  td.mono, .mono{font-family:'IBM Plex Mono',monospace;}
+  td.amount{font-family:'IBM Plex Mono',monospace;font-weight:600;font-variant-numeric:tabular-nums;}
+  td.ref{color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:12.3px;}
+  .desc-primary{font-weight:500;}
+  .desc-secondary{color:var(--ink-faint);font-size:11.8px;}
+
+  .status-pill{
+    display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;
+    text-transform:uppercase;letter-spacing:0.03em;
+  }
+  .status-PROCESSED{background:var(--green-bg);color:var(--green);}
+  .status-PENDING{background:var(--amber-bg);color:#8A6415;}
+  .status-FAILED{background:var(--red-bg);color:var(--red);}
+
+  .empty-state{padding:60px 20px;text-align:center;color:var(--ink-soft);}
+  .empty-state .glyph{font-family:'IBM Plex Mono',monospace;font-size:28px;color:var(--line-strong);margin-bottom:10px;}
+  .empty-state strong{color:var(--ink);display:block;margin-bottom:4px;font-size:15px;}
+
+  /* Closing balance / subtotal footer */
+  tfoot td{
+    padding:13px 14px;border-top:3px double var(--ink);
+    font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12.8px;
+    background:#FBFAF7;color:var(--ink);
+  }
+  tfoot .label{color:var(--ink-soft);font-weight:500;text-transform:uppercase;font-size:10.5px;letter-spacing:0.05em;}
+
+  /* ---------- Pagination ---------- */
+  .pagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:16px 4px 0;}
+  .pagination .pages{display:flex;gap:4px;align-items:center;}
+  .page-link{
+    min-width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;
+    border:1px solid var(--line-strong);border-radius:var(--radius);text-decoration:none;
+    color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:12.5px;background:#fff;
+  }
+  .page-link:hover{border-color:var(--ink);color:var(--ink);}
+  .page-link.current{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:600;}
+  .page-link.disabled{opacity:0.35;pointer-events:none;}
+  .jump{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-soft);}
+  .jump input{width:56px;font-family:'IBM Plex Mono',monospace;text-align:center;border:1px solid var(--line-strong);border-radius:var(--radius);padding:5px;}
+
+  @media (max-width: 980px){
+    .filters-row{grid-template-columns:1fr 1fr;}
+  }
+  @media (max-width: 640px){
+    .topbar{flex-direction:column;gap:10px;align-items:flex-start;}
+    .topbar .stamp{text-align:left;}
+    .filters-row{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <aside th:replace="~{fragments/nav :: sidebar(active='transactions')}"></aside>
+
+  <main class="main">
+
+  <!-- ===================== Topbar ===================== -->
+  <header class="topbar">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <button class="menu-toggle" type="button" aria-label="Toggle menu">☰</button>
+      <div>
+        <h1>Transaction Ledger</h1>
+        <span class="sub">Card transactions — Magicash reconciliation</span>
+      </div>
+    </div>
+    <div class="stamp" style="display:flex;align-items:center;gap:16px;">
+      <div style="text-align:right;">
+        <div>SOURCE: MAGICASH</div>
+        <div th:text="'AS OF ' + ${#temporals.format(#temporals.createNow(), 'dd MMM yyyy, HH:mm')}">AS OF 04 JUL 2026, 09:12</div>
+      </div>
+      <a class="btn btn-primary" th:href="@{/transactions/new}" style="font-family:'Inter',sans-serif;">+ New Transaction</a>
+    </div>
+  </header>
+
+  <div class="flash-banner" th:if="${flashMessage}" th:text="${flashMessage}">Transactions reconciled.</div>
+
+  <!-- ===================== Filter panel ===================== -->
+  <form class="filters" method="get" th:action="@{/transactions}" id="filterForm">
+    <input type="hidden" name="sort" th:value="${param.sort}">
+    <input type="hidden" name="size" th:value="${param.size}">
+
+    <div class="filters-row">
+      <div class="field search-field">
+        <label for="q">Search client / card / plate / POS / SDC / stamp</label>
+        <input type="text" id="q" name="q" placeholder="e.g. 4471 2211 3300, “KAMANA”, or an SDC/stamp ID" th:value="${filter.q}">
+      </div>
+      <div class="field">
+        <label for="dateFrom">Date from</label>
+        <input type="date" id="dateFrom" name="dateFrom" th:value="${filter.dateFrom}">
+      </div>
+      <div class="field">
+        <label for="dateTo">Date to</label>
+        <input type="date" id="dateTo" name="dateTo" th:value="${filter.dateTo}">
+      </div>
+      <div class="field">
+        <label for="status">Status</label>
+        <select id="status" name="status">
+          <option value="">All statuses</option>
+          <option value="PROCESSED" th:selected="${filter.status == 'PROCESSED'}">Processed</option>
+          <option value="PENDING"   th:selected="${filter.status == 'PENDING'}">Pending</option>
+          <option value="FAILED"    th:selected="${filter.status == 'FAILED'}">Failed</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="minAmount">Min amount</label>
+        <input type="number" step="0.01" id="minAmount" name="minAmount" placeholder="0.00" th:value="${filter.minAmount}">
+      </div>
+      <div class="field">
+        <label for="maxAmount">Max amount</label>
+        <input type="number" step="0.01" id="maxAmount" name="maxAmount" placeholder="No limit" th:value="${filter.maxAmount}">
+      </div>
+      <div class="field checkbox-dropdown" data-all-label="All machines" data-noun="machines selected">
+        <label>Terminal / POS machine</label>
+        <button type="button" class="dropdown-toggle">
+          <span class="dropdown-label">All machines</span>
+          <span class="chevron">▾</span>
+        </button>
+        <div class="dropdown-panel" hidden>
+          <input type="text" class="dropdown-search" placeholder="Search machines…">
+          <div class="dropdown-actions">
+            <button type="button" data-action="select-all">Select all</button>
+            <button type="button" data-action="clear">Clear</button>
+          </div>
+          <div class="dropdown-list">
+            <label class="dropdown-option" th:each="m : ${machines}">
+              <input type="checkbox" name="machineId" th:value="${m.id}"
+                     th:checked="${filter.machineIds != null and filter.machineIds.contains(m.id)}">
+              <span th:text="${(m.posName ?: 'Unnamed') + (m.posNumber != null ? ' (#' + m.posNumber + ')' : '')}">Kigali Fuel Station #4</span>
+            </label>
+            <div class="dropdown-option-empty" hidden>No machines match "<span class="search-echo"></span>"</div>
+          </div>
+        </div>
+      </div>
+      <div class="field checkbox-dropdown" data-all-label="All customers" data-noun="customers selected">
+        <label>Customer</label>
+        <button type="button" class="dropdown-toggle">
+          <span class="dropdown-label">All customers</span>
+          <span class="chevron">▾</span>
+        </button>
+        <div class="dropdown-panel" hidden>
+          <input type="text" class="dropdown-search" placeholder="Search customers…">
+          <div class="dropdown-actions">
+            <button type="button" data-action="select-all">Select all</button>
+            <button type="button" data-action="clear">Clear</button>
+          </div>
+          <div class="dropdown-list">
+            <label class="dropdown-option" th:each="c : ${customers}">
+              <input type="checkbox" name="customerId" th:value="${c.id}"
+                     th:checked="${filter.customerIds != null and filter.customerIds.contains(c.id)}">
+              <span th:text="${(c.clientName ?: 'Unnamed') + (c.clientTin != null ? ' — TIN ' + c.clientTin : '')}">KAMANA Eric — TIN 123456789</span>
+            </label>
+            <div class="dropdown-option-empty" hidden>No customers match "<span class="search-echo"></span>"</div>
+          </div>
+        </div>
+      </div>
+      <div class="filters-actions">
+        <button type="submit" class="btn btn-primary">Apply filters</button>
+        <a class="btn btn-ghost" th:href="@{/transactions}">Reset</a>
+      </div>
+    </div>
+
+    <div class="active-filters" th:if="${hasActiveFilters}">
+      <span class="chip" th:if="${filter.q != null and !filter.q.isBlank()}">
+        search: <span th:text="${filter.q}">KAMANA</span>
+        <a th:href="@{/transactions(status=${filter.status},dateFrom=${filter.dateFrom},dateTo=${filter.dateTo},machineId=${filter.machineIds},customerId=${filter.customerIds})}">&times;</a>
+      </span>
+      <span class="chip" th:if="${filter.status != null and !filter.status.isBlank()}">
+        status: <span th:text="${filter.status}">PROCESSED</span>
+        <a th:href="@{/transactions(q=${filter.q},dateFrom=${filter.dateFrom},dateTo=${filter.dateTo},machineId=${filter.machineIds},customerId=${filter.customerIds})}">&times;</a>
+      </span>
+      <span class="chip" th:if="${filter.dateFrom != null or filter.dateTo != null}">
+        date: <span th:text="${(filter.dateFrom != null ? filter.dateFrom : '…') + ' → ' + (filter.dateTo != null ? filter.dateTo : '…')}">01/06/2026 → 04/07/2026</span>
+        <a th:href="@{/transactions(q=${filter.q},status=${filter.status},machineId=${filter.machineIds},customerId=${filter.customerIds})}">&times;</a>
+      </span>
+      <span class="chip" th:if="${filter.minAmount != null or filter.maxAmount != null}">
+        amount: <span th:text="${(filter.minAmount != null ? filter.minAmount : '0') + ' – ' + (filter.maxAmount != null ? filter.maxAmount : '∞')}">0 – ∞</span>
+        <a th:href="@{/transactions(q=${filter.q},status=${filter.status},dateFrom=${filter.dateFrom},dateTo=${filter.dateTo},machineId=${filter.machineIds},customerId=${filter.customerIds})}">&times;</a>
+      </span>
+      <span class="chip" th:if="${filter.machineIds != null and !filter.machineIds.isEmpty()}">
+        machine: <span th:text="${selectedMachineLabel ?: (filter.machineIds.size() + ' selected')}">Kigali Fuel Station #4</span>
+        <a th:href="@{/transactions(q=${filter.q},status=${filter.status},dateFrom=${filter.dateFrom},dateTo=${filter.dateTo},minAmount=${filter.minAmount},maxAmount=${filter.maxAmount},customerId=${filter.customerIds})}">&times;</a>
+      </span>
+      <span class="chip" th:if="${filter.customerIds != null and !filter.customerIds.isEmpty()}">
+        customer: <span th:text="${selectedCustomerLabel ?: (filter.customerIds.size() + ' selected')}">KAMANA Eric</span>
+        <a th:href="@{/transactions(q=${filter.q},status=${filter.status},dateFrom=${filter.dateFrom},dateTo=${filter.dateTo},minAmount=${filter.minAmount},maxAmount=${filter.maxAmount},machineId=${filter.machineIds})}">&times;</a>
+      </span>
+    </div>
+  </form>
+
+  <!-- ===================== Result meta ===================== -->
+  <div class="result-bar">
+    <div class="count">
+      Showing <strong th:text="${transactions.numberOfElements}">50</strong> of
+      <strong th:text="${#numbers.formatInteger(transactions.totalElements, 0, 'COMMA')}">3,204,981</strong> transactions
+    </div>
+    <div class="page-size">
+      <label for="sizeSelect">Rows per page</label>
+      <select id="sizeSelect">
+        <option value="25"  th:selected="${transactions.size == 25}">25</option>
+        <option value="50"  th:selected="${transactions.size == 50}">50</option>
+        <option value="100" th:selected="${transactions.size == 100}">100</option>
+        <option value="250" th:selected="${transactions.size == 250}">250</option>
+      </select>
+      <span style="width:1px;height:20px;background:var(--line-strong);display:inline-block;margin:0 4px;"></span>
+      <button type="button" class="btn btn-ghost export-btn" data-format="xlsx" style="padding:6px 12px;font-size:12.5px;">⇩ Excel</button>
+      <button type="button" class="btn btn-ghost export-btn" data-format="pdf" style="padding:6px 12px;font-size:12.5px;"
+              title="PDF export is capped at 5,000 rows — use Excel for the full filtered set">⇩ PDF</button>
+      <span id="exportStatus" class="mono" style="font-size:12px;color:var(--ink-soft);"></span>
+    </div>
+  </div>
+
+  <!-- ===================== Bulk reconcile toolbar ===================== -->
+  <form id="reconcileForm" class="confirm-submit" th:action="@{/transactions/reconcile}" method="post"
+        data-confirm-page="Reconcile the selected transactions? They'll disappear from this list — only visible afterward from the Reconciliation record you're creating."
+        data-confirm-all="Reconcile ALL transactions matching your current filter — across every page, not just this one? They'll disappear from this list — only visible afterward from the Reconciliation record you're creating."
+        data-confirm="Reconcile the selected transactions? They'll disappear from this list — only visible afterward from the Reconciliation record you're creating."
+        sec:authorize="hasAnyRole('ADMIN','ANALYST','CUSTOMER_SCOPED')">
+    <input type="hidden" name="reconcileAllMatching" id="reconcileAllMatching" value="false">
+    <!-- Mirrors the ledger's current filter so the "all matching" path can be re-derived
+         server-side from these — never from a client-submitted ID list at that scale. -->
+    <input type="hidden" name="q" th:value="${param.q}">
+    <input type="hidden" name="status" th:value="${param.status}">
+    <input type="hidden" name="dateFrom" th:if="${filter.dateFrom != null}" th:value="${param.dateFrom}">
+    <input type="hidden" name="dateTo" th:if="${filter.dateTo != null}" th:value="${param.dateTo}">
+    <input type="hidden" name="minAmount" th:if="${filter.minAmount != null}" th:value="${param.minAmount}">
+    <input type="hidden" name="maxAmount" th:if="${filter.maxAmount != null}" th:value="${param.maxAmount}">
+    <input type="hidden" name="machineId" th:each="mid : ${filter.machineIds}" th:value="${mid}">
+    <input type="hidden" name="customerId" th:each="cid : ${filter.customerIds}" th:value="${cid}">
+    <div class="reconcile-toolbar">
+      <span class="count-badge"><span id="selectedCount">0</span> selected</span>
+      <label style="display:flex;align-items:center;gap:5px;font-weight:500;text-transform:none;letter-spacing:normal;cursor:pointer;">
+        <input type="checkbox" id="selectAllMatchingToggle" class="row-select">
+        Select all <span th:text="${#numbers.formatInteger(transactions.totalElements, 0, 'COMMA')}">3,204,981</span> matching this filter (every page)
+      </label>
+      <label for="reconciliationDate">Date</label>
+      <input type="date" id="reconciliationDate" name="reconciliationDate" th:value="${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd')}" required>
+      <label for="reconciliationReference">Reference (optional)</label>
+      <input type="text" id="reconciliationReference" name="reference" placeholder="e.g. July batch 2">
+      <button type="submit" id="reconcileBtn" class="btn btn-primary" disabled>Reconcile selected</button>
+    </div>
+  </form>
+
+  <!-- ===================== Table ===================== -->
+  <div class="ledger-wrap">
+    <div class="ledger-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th sec:authorize="hasAnyRole('ADMIN','ANALYST','CUSTOMER_SCOPED')">
+              <input type="checkbox" id="selectAllOnPage" class="row-select" title="Select all on this page">
+            </th>
+            <th>
+              <a th:href="@{/transactions(q=${param.q},status=${param.status},dateFrom=${param.dateFrom},dateTo=${param.dateTo},minAmount=${param.minAmount},maxAmount=${param.maxAmount},machineId=${param.machineId},customerId=${param.customerId},size=${transactions.size},sort='dateTimeTransaction,' + (${sortProperty == 'dateTimeTransaction' and sortDirection == 'asc'} ? 'desc' : 'asc'))}">
+                Date / Time
+                <span class="sort-arrow" th:if="${sortProperty == 'dateTimeTransaction' and sortDirection == 'asc'}">▲</span>
+                <span class="sort-arrow" th:if="${sortProperty == 'dateTimeTransaction' and sortDirection == 'desc'}">▼</span>
+              </a>
+            </th>
+            <th>Client</th>
+            <th>Card / Plate</th>
+            <th>POS / Service</th>
+            <th>SDC / Stamp</th>
+            <th class="num">Qty × Unit</th>
+            <th class="num">
+              <a th:href="@{/transactions(q=${param.q},status=${param.status},dateFrom=${param.dateFrom},dateTo=${param.dateTo},minAmount=${param.minAmount},maxAmount=${param.maxAmount},machineId=${param.machineId},customerId=${param.customerId},size=${transactions.size},sort='totalAmount,' + (${sortProperty == 'totalAmount' and sortDirection == 'asc'} ? 'desc' : 'asc'))}">
+                Amount
+                <span class="sort-arrow" th:if="${sortProperty == 'totalAmount' and sortDirection == 'asc'}">▲</span>
+                <span class="sort-arrow" th:if="${sortProperty == 'totalAmount' and sortDirection == 'desc'}">▼</span>
+              </a>
+            </th>
+            <th>Status</th>
+            <th class="num">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="tx : ${transactions.content}">
+            <td sec:authorize="hasAnyRole('ADMIN','ANALYST','CUSTOMER_SCOPED')">
+              <input type="checkbox" name="selectedIds" class="row-select" th:value="${tx.id}" form="reconcileForm">
+            </td>
+            <td class="mono" th:text="${tx.dateTimeTransaction != null} ? ${#temporals.format(tx.dateTimeTransaction, 'dd MMM yyyy HH:mm')} : '—'">04 Jul 2026 09:12</td>
+            <td>
+              <div class="desc-primary" th:text="${tx.clientName ?: '—'}">KAMANA Eric</div>
+              <div class="desc-secondary" th:text="${tx.transactionGuid}">a1b2c3d4-...</div>
+            </td>
+            <td>
+              <div class="mono" th:text="${tx.cardNumber ?: '—'}">5312 •••• 8890</div>
+              <div class="desc-secondary" th:text="${tx.plateNumber}">RAD 221 B</div>
+            </td>
+            <td>
+              <div class="desc-primary" th:text="${tx.posName ?: '—'}">Kigali Fuel Station #4</div>
+              <div class="desc-secondary" th:text="${tx.serviceName}">Diesel</div>
+            </td>
+            <td>
+              <div class="mono" th:text="${tx.sdcId ?: '—'}">SDC00012345</div>
+              <div class="desc-secondary mono" th:text="${tx.stampNumber ?: (tx.stampData ?: '—')}">00123/45678</div>
+            </td>
+            <td class="num mono">
+              <span th:text="${tx.quantity != null} ? ${#numbers.formatDecimal(tx.quantity, 1, 2)} : '—'">10.00</span>
+              <span th:if="${tx.unitPrice != null}" th:text="' × ' + ${#numbers.formatDecimal(tx.unitPrice, 1, 2)}"> × 1,450.00</span>
+            </td>
+            <td class="num amount" th:text="${tx.totalAmount != null} ? ${#numbers.formatDecimal(tx.totalAmount, 1, 'COMMA', 2, 'POINT')} : '—'">
+              12,450.00
+            </td>
+            <td>
+              <span class="status-pill status-FAILED"    th:if="${tx.processed == true and tx.success != true}">Failed</span>
+              <span class="status-pill status-PROCESSED" th:if="${tx.processed == true and tx.success == true}">Processed</span>
+              <span class="status-pill status-PENDING"   th:if="${tx.processed != true}">Pending</span>
+            </td>
+            <td class="num" style="white-space:nowrap;">
+              <a th:href="@{/transactions/{id}(id=${tx.id})}" style="font-size:12.5px;font-weight:600;color:var(--green);text-decoration:none;">View</a>
+              &nbsp;·&nbsp;
+              <a th:href="@{/transactions/{id}/edit(id=${tx.id})}" style="font-size:12.5px;font-weight:600;color:var(--ink-soft);text-decoration:none;">Edit</a>
+            </td>
+          </tr>
+        </tbody>
+
+        <tbody th:if="${transactions.numberOfElements == 0}">
+          <tr>
+            <!-- Fixed colspan now — every role that can reach this page (ADMIN/ANALYST/
+                 CUSTOMER_SCOPED) gets the checkbox column since reconciliation opened up to
+                 CUSTOMER_SCOPED too; this used to vary by role when only ADMIN/ANALYST had it. -->
+            <td colspan="10">
+              <div class="empty-state">
+                <div class="glyph">— · —</div>
+                <strong>No transactions match these filters</strong>
+                No entries fall within the current search and filter combination. Widen the date range or clear a filter.
+              </div>
+            </td>
+          </tr>
+        </tbody>
+
+        <tfoot th:if="${transactions.numberOfElements > 0}">
+          <tr>
+            <td colspan="7" class="label">Page subtotal (this page only)</td>
+            <td class="num" th:text="${#numbers.formatDecimal(pageSubtotal, 1, 'COMMA', 2, 'POINT')}">184,220.50</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===================== Pagination ===================== -->
+  <div class="pagination" th:if="${transactions.totalPages > 0}">
+    <div class="pages">
+      <a class="page-link" th:classappend="${transactions.first} ? 'disabled'"
+         th:href="@{/transactions(q=${param.q},status=${param.status},dateFrom=${param.dateFrom},dateTo=${param.dateTo},minAmount=${param.minAmount},maxAmount=${param.maxAmount},machineId=${param.machineId},customerId=${param.customerId},size=${transactions.size},sort=${param.sort},page=0)}">«</a>
+      <a class="page-link" th:classappend="${transactions.first} ? 'disabled'"
+         th:href="@{/transactions(q=${param.q},status=${param.status},dateFrom=${param.dateFrom},dateTo=${param.dateTo},minAmount=${param.minAmount},maxAmount=${param.maxAmount},machineId=${param.machineId},customerId=${param.customerId},size=${transactions.size},sort=${param.sort},page=${transactions.number - 1})}">‹</a>
+
+      <span th:each="p : ${#numbers.sequence(
+                T(java.lang.Math).max(0, transactions.number - 2),
+                T(java.lang.Math).min(transactions.totalPages - 1, transactions.number + 2))}">
+        <a class="page-link" th:classappend="${p == transactions.number} ? 'current'"
+           th:href="@{/transactions(q=${param.q},status=${param.status},dateFrom=${param.dateFrom},dateTo=${param.dateTo},minAmount=${param.minAmount},maxAmount=${param.maxAmount},machineId=${param.machineId},customerId=${param.customerId},size=${transactions.size},sort=${param.sort},page=${p})}"
+           th:text="${p + 1}">1</a>
+      </span>
+
+      <a class="page-link" th:classappend="${transactions.last} ? 'disabled'"
+         th:href="@{/transactions(q=${param.q},status=${param.status},dateFrom=${param.dateFrom},dateTo=${param.dateTo},minAmount=${param.minAmount},maxAmount=${param.maxAmount},machineId=${param.machineId},customerId=${param.customerId},size=${transactions.size},sort=${param.sort},page=${transactions.number + 1})}">›</a>
+      <a class="page-link" th:classappend="${transactions.last} ? 'disabled'"
+         th:href="@{/transactions(q=${param.q},status=${param.status},dateFrom=${param.dateFrom},dateTo=${param.dateTo},minAmount=${param.minAmount},maxAmount=${param.maxAmount},machineId=${param.machineId},customerId=${param.customerId},size=${transactions.size},sort=${param.sort},page=${transactions.totalPages - 1})}">»</a>
+    </div>
+
+    <form class="jump" th:action="@{/transactions}" method="get">
+      <input type="hidden" name="q" th:value="${param.q}">
+      <input type="hidden" name="status" th:value="${param.status}">
+      <input type="hidden" name="dateFrom" th:if="${filter.dateFrom != null}" th:value="${param.dateFrom}">
+      <input type="hidden" name="dateTo" th:if="${filter.dateTo != null}" th:value="${param.dateTo}">
+      <input type="hidden" name="minAmount" th:if="${filter.minAmount != null}" th:value="${param.minAmount}">
+      <input type="hidden" name="maxAmount" th:if="${filter.maxAmount != null}" th:value="${param.maxAmount}">
+      <input type="hidden" name="machineId" th:each="mid : ${filter.machineIds}" th:value="${mid}">
+      <input type="hidden" name="customerId" th:each="cid : ${filter.customerIds}" th:value="${cid}">
+      <input type="hidden" name="size" th:value="${transactions.size}">
+      <input type="hidden" name="sort" th:value="${param.sort}">
+      Page
+      <input type="number" name="page" min="1" th:max="${transactions.totalPages}" th:placeholder="${transactions.number + 1}">
+      of <span class="mono" th:text="${#numbers.formatInteger(transactions.totalPages, 0, 'COMMA')}">45,832</span>
+      <button type="submit" class="btn btn-ghost">Go</button>
+    </form>
+  </div>
+
+  </main>
+</div>
+
+<script th:inline="javascript">
+  const CTX = /*[[@{/}]]*/ '/';
+  const SORT_PROPERTY = /*[[${sortProperty}]]*/ 'dateTimeTransaction';
+  const SORT_DIRECTION = /*[[${sortDirection}]]*/ 'desc';
+  const CSRF_TOKEN = document.querySelector('meta[name="_csrf"]')?.content;
+  const CSRF_HEADER = document.querySelector('meta[name="_csrf_header"]')?.content;
+
+  // ---------------------------------------------------------------- Global click/input/change delegation
+  //
+  // Every interactive control on this page used to be wired with inline
+  // onclick/oninput/onchange/onsubmit attributes. Those silently do nothing
+  // if the app ever serves a Content-Security-Policy header without
+  // 'unsafe-inline' for script-src — this is exactly what broke the Select
+  // all / Clear / search controls in production once. Rewritten as delegated
+  // listeners so the whole page works regardless of CSP.
+
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.menu-toggle')) {
+      document.getElementById('sidebar').classList.toggle('open');
+      return;
+    }
+
+    const toggleBtn = e.target.closest('.dropdown-toggle');
+    if (toggleBtn) {
+      e.stopPropagation();
+      const panel = toggleBtn.closest('.checkbox-dropdown').querySelector('.dropdown-panel');
+      panel.hidden = !panel.hidden;
+      return;
+    }
+
+    const actionBtn = e.target.closest('.dropdown-actions button[data-action]');
+    if (actionBtn) {
+      e.stopPropagation();
+      setAllDropdownCheckboxes(actionBtn.closest('.checkbox-dropdown'), actionBtn.dataset.action === 'select-all');
+      return;
+    }
+
+    const exportBtn = e.target.closest('.export-btn');
+    if (exportBtn) {
+      startExport(exportBtn.dataset.format, exportBtn);
+      return;
+    }
+
+    // Clicks anywhere else inside an open panel (search box, option list) must
+    // not be treated as an "outside click" that closes it.
+    if (e.target.closest('.dropdown-panel')) {
+      e.stopPropagation();
+      return;
+    }
+
+    // Genuine outside click: close any open dropdown panels.
+    document.querySelectorAll('.checkbox-dropdown').forEach(container => {
+      const panel = container.querySelector('.dropdown-panel');
+      if (panel && !panel.hidden && !container.contains(e.target)) {
+        panel.hidden = true;
+      }
+    });
+  });
+
+  document.addEventListener('input', (e) => {
+    if (e.target.matches('.dropdown-search')) {
+      filterDropdownOptions(e.target);
+    }
+  });
+
+  document.addEventListener('change', (e) => {
+    if (e.target.id === 'sizeSelect') {
+      changeSize(e.target.value);
+      return;
+    }
+    if (e.target.matches('.dropdown-option input[type="checkbox"]')) {
+      updateDropdownLabelForContainer(e.target.closest('.checkbox-dropdown'));
+      return;
+    }
+    if (e.target.id === 'selectAllMatchingToggle') {
+      setSelectAllMatchingMode(e.target.checked);
+      return;
+    }
+    if (e.target.id === 'selectAllOnPage') {
+      document.querySelectorAll('input[name="selectedIds"]').forEach(cb => { cb.checked = e.target.checked; });
+      updateReconcileToolbar();
+      return;
+    }
+    if (e.target.name === 'selectedIds') {
+      updateReconcileToolbar();
+    }
+  });
+
+  // "Select all matching this filter" is a distinct mode, not just "check every
+  // visible box" — it can cover transactions on pages that were never rendered,
+  // so per-page checkboxes are disabled while it's active (they'd be misleading
+  // otherwise) and the actual bulk action goes through reconcileAllMatching on
+  // the server, re-deriving the matching set from the filter itself.
+  function setSelectAllMatchingMode(enabled){
+    const form = document.getElementById('reconcileForm');
+    document.getElementById('reconcileAllMatching').value = enabled ? 'true' : 'false';
+
+    document.getElementById('selectAllOnPage').disabled = enabled;
+    document.querySelectorAll('input[name="selectedIds"]').forEach(cb => { cb.disabled = enabled; });
+
+    const btn = document.getElementById('reconcileBtn');
+    const countEl = document.getElementById('selectedCount');
+    if (enabled) {
+      form.dataset.confirm = form.dataset.confirmAll;
+      btn.textContent = 'Reconcile all matching';
+      btn.disabled = false;
+      if (countEl) countEl.textContent = 'all';
+    } else {
+      form.dataset.confirm = form.dataset.confirmPage;
+      btn.textContent = 'Reconcile selected';
+      updateReconcileToolbar();
+    }
+  }
+
+  function updateReconcileToolbar(){
+    if (document.getElementById('selectAllMatchingToggle').checked) return; // that mode manages its own state
+    const boxes = Array.from(document.querySelectorAll('input[name="selectedIds"]'));
+    const checked = boxes.filter(cb => cb.checked);
+    const countEl = document.getElementById('selectedCount');
+    const btn = document.getElementById('reconcileBtn');
+    if (countEl) countEl.textContent = checked.length;
+    if (btn) btn.disabled = checked.length === 0;
+    const selectAll = document.getElementById('selectAllOnPage');
+    if (selectAll) selectAll.checked = boxes.length > 0 && checked.length === boxes.length;
+  }
+
+  document.addEventListener('submit', (e) => {
+    if (e.target.matches('.jump')) {
+      jumpToPage(e);
+      return;
+    }
+    if (e.target.matches('.confirm-submit')) {
+      if (!confirm(e.target.dataset.confirm || 'Are you sure?')) {
+        e.preventDefault();
+      }
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', updateReconcileToolbar);
+
+  function filterDropdownOptions(input){
+    const container = input.closest('.checkbox-dropdown');
+    const q = input.value.trim().toLowerCase();
+    const options = container.querySelectorAll('.dropdown-option');
+    let visibleCount = 0;
+    options.forEach(opt => {
+      const matches = opt.textContent.toLowerCase().includes(q);
+      opt.hidden = !matches;
+      if (matches) visibleCount++;
+    });
+    const empty = container.querySelector('.dropdown-option-empty');
+    if (empty) {
+      empty.querySelector('.search-echo').textContent = input.value;
+      empty.hidden = visibleCount > 0 || q === '';
+    }
+  }
+
+  function setAllDropdownCheckboxes(container, checked){
+    container.querySelectorAll('.dropdown-option input[type="checkbox"]').forEach(cb => {
+      // only affect options currently visible under the active search
+      if (!cb.closest('.dropdown-option').hidden) {
+        cb.checked = checked;
+      }
+    });
+    updateDropdownLabelForContainer(container);
+  }
+
+  function updateDropdownLabelForContainer(container){
+    const checked = Array.from(container.querySelectorAll('.dropdown-option input[type="checkbox"]')).filter(cb => cb.checked);
+    const label = container.querySelector('.dropdown-label');
+    const allLabel = container.dataset.allLabel || 'All';
+    const noun = container.dataset.noun || 'selected';
+    if (checked.length === 0) {
+      label.textContent = allLabel;
+    } else if (checked.length === 1) {
+      label.textContent = checked[0].closest('.dropdown-option').querySelector('span').textContent.trim();
+    } else {
+      label.textContent = checked.length + ' ' + noun;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.checkbox-dropdown').forEach(updateDropdownLabelForContainer);
+  });
+
+  // Strips empty-string params (Spring can't convert "" to a LocalDate/BigDecimal,
+  // so a blank filter field must be omitted entirely rather than sent as "").
+  function cleanFilterParams(){
+    const form = document.getElementById('filterForm');
+    const params = new URLSearchParams(new FormData(form));
+    for (const key of [...params.keys()]) {
+      if (params.get(key) === '') {
+        params.delete(key);
+      }
+    }
+    return params;
+  }
+
+  function changeSize(size){
+    const params = cleanFilterParams();
+    params.set('size', size);
+    params.set('page', 0);
+    window.location.href = CTX + 'transactions?' + params.toString();
+  }
+
+  function jumpToPage(e){
+    const input = e.target.querySelector('input[name="page"]');
+    const val = parseInt(input.value, 10);
+    if (!val || val < 1){ e.preventDefault(); return; }
+    input.value = val - 1;
+  }
+
+  // ---------------------------------------------------------------- Export
+  //
+  // Exports run as a background job on the server instead of a single long
+  // download: generation isn't tied to one HTTP connection staying open, so
+  // it isn't lost if the network drops or the machine sleeps mid-export.
+  // The button polls status and triggers a (short) download once ready.
+
+  function setExportStatus(text){
+    const el = document.getElementById('exportStatus');
+    if (el) el.textContent = text;
+  }
+
+  async function startExport(format, btnEl){
+    const originalLabel = btnEl.textContent;
+    btnEl.disabled = true;
+    btnEl.textContent = 'Starting…';
+    setExportStatus('');
+
+    const params = cleanFilterParams();
+    params.delete('size');
+    params.set('sort', SORT_PROPERTY + ',' + SORT_DIRECTION);
+
+    const headers = {};
+    if (CSRF_TOKEN && CSRF_HEADER) headers[CSRF_HEADER] = CSRF_TOKEN;
+
+    try {
+      const res = await fetch(CTX + 'transactions/export/' + format + '/jobs?' + params.toString(), {
+        method: 'POST',
+        headers
+      });
+      if (!res.ok) throw new Error('Could not start export (HTTP ' + res.status + ')');
+      const job = await res.json();
+      pollExportJob(job.jobId, btnEl, originalLabel);
+    } catch (e) {
+      btnEl.textContent = 'Export failed';
+      setExportStatus(e.message || 'Could not start export');
+      setTimeout(() => { btnEl.disabled = false; btnEl.textContent = originalLabel; }, 3000);
+    }
+  }
+
+  async function pollExportJob(jobId, btnEl, originalLabel){
+    try {
+      const res = await fetch(CTX + 'exports/jobs/' + jobId);
+      if (!res.ok) throw new Error('Lost track of export job');
+      const job = await res.json();
+
+      if (job.status === 'COMPLETED') {
+        btnEl.textContent = originalLabel;
+        btnEl.disabled = false;
+        const rows = job.totalMatching >= 0 ? job.totalMatching.toLocaleString() : '';
+        setExportStatus('Ready — ' + rows + ' rows' + (job.truncated ? ' (PDF truncated to first 5,000 — use Excel for the full set)' : ''));
+        window.location = CTX + 'exports/jobs/' + jobId + '/download';
+        return;
+      }
+
+      if (job.status === 'FAILED') {
+        btnEl.textContent = originalLabel;
+        btnEl.disabled = false;
+        setExportStatus('Export failed: ' + (job.errorMessage || 'unknown error'));
+        return;
+      }
+
+      const rowsLabel = job.totalMatching >= 0 ? ' — ' + job.totalMatching.toLocaleString() + ' matching rows' : '';
+      btnEl.textContent = 'Generating…';
+      setExportStatus((job.status === 'QUEUED' ? 'Queued' : 'Generating') + rowsLabel);
+      setTimeout(() => pollExportJob(jobId, btnEl, originalLabel), 1500);
+    } catch (e) {
+      // Transient network hiccup (e.g. machine just woke up) — keep polling
+      // rather than giving up, since the job itself is unaffected server-side.
+      setTimeout(() => pollExportJob(jobId, btnEl, originalLabel), 3000);
+    }
+  }
+</script>
+</body>
+</html>

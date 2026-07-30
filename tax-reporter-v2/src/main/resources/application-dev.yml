@@ -1,0 +1,16 @@
+# Active by default (see spring.profiles.default in application.yml) — this is what you get
+# with no further setup, not something you need to explicitly opt into for local development.
+# Explicitly setting -Dspring.profiles.active=sp/oracle/anything-else overrides this, since
+# spring.profiles.default only applies as a fallback.
+#
+# Kept intentionally small — more verbose logging only. Nothing here changes the datasource,
+# ddl-auto, or any behavior that would make "dev" a meaningfully different environment from the
+# base config; the point is visibility into what the app is doing locally, not a different
+# feature set. Extend this file if dev actually needs to diverge from the base config in some
+# other way (a local-only default admin password override, a different port, etc.).
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+    nika.tax.reporter: DEBUG
