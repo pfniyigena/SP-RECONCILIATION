@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title th:text="${isEdit} ? 'Edit Stamp Machine — Tax Reporter' : 'New Stamp Machine — Tax Reporter'">New Stamp Machine</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<th:block th:replace="~{fragments/crud-styles :: crud}"></th:block>
+</head>
+<body>
+<div class="shell">
+  <aside th:replace="~{fragments/nav :: sidebar(active='stampMachines')}"></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1 th:text="${isEdit} ? 'Edit Stamp Machine' : 'New Stamp Machine'">New Stamp Machine</h1>
+        <span class="sub">Placeholder fields — replace once the real StampMachine definition is available</span>
+      </div>
+      <a class="btn btn-ghost" th:href="@{/stamp-machines}">← Back to stamp machines</a>
+    </header>
+
+    <div class="crud-flash" th:if="${flashMessage}" th:text="${flashMessage}">Saved.</div>
+
+    <div class="crud-form-card">
+      <form th:action="${isEdit} ? @{/stamp-machines/{id}/edit(id=${form.id})} : @{/stamp-machines}" th:object="${form}" method="post">
+        <div class="alert-error-banner" th:if="${#fields.hasErrors('*')}">
+          Please correct the highlighted fields below before saving.
+        </div>
+        <input type="hidden" th:if="${isEdit}" th:field="*{id}">
+
+        <div class="crud-form-grid">
+          <div class="crud-field">
+            <label for="serialNumber">Serial number *</label>
+            <input type="text" id="serialNumber" class="mono" th:field="*{serialNumber}"
+                   th:classappend="${#fields.hasErrors('serialNumber')} ? 'field-error'">
+            <span class="error-text" th:if="${#fields.hasErrors('serialNumber')}" th:errors="*{serialNumber}">Required</span>
+          </div>
+          <div class="crud-field">
+            <label for="model">Model</label>
+            <input type="text" id="model" th:field="*{model}">
+          </div>
+          <div class="crud-field">
+            <label for="sdcId">SDC ID</label>
+            <input type="text" id="sdcId" class="mono" th:field="*{sdcId}"
+                   th:classappend="${#fields.hasErrors('sdcId')} ? 'field-error'">
+            <span class="error-text" th:if="${#fields.hasErrors('sdcId')}" th:errors="*{sdcId}">Already in use</span>
+          </div>
+        </div>
+
+        <div class="crud-checkbox-field" style="margin-top:18px;">
+          <input type="checkbox" id="enabled" th:field="*{enabled}">
+          <label for="enabled">Enabled</label>
+        </div>
+
+        <div class="crud-form-actions">
+          <a class="btn btn-ghost" th:href="@{/stamp-machines}">Cancel</a>
+          <button type="submit" class="btn btn-primary" th:text="${isEdit} ? 'Save changes' : 'Create stamp machine'">Create stamp machine</button>
+        </div>
+      </form>
+    </div>
+  </main>
+</div>
+</body>
+</html>

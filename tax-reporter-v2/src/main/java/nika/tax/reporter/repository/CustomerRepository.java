@@ -1,5 +1,6 @@
 package nika.tax.reporter.repository;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,6 +13,13 @@ import nika.tax.reporter.postgres.domain.Customer;
 
 public interface CustomerRepository
         extends JpaRepository<Customer, UUID>, JpaSpecificationExecutor<Customer> {
+
+    /** Used by the Oracle ingestion jobs (OracleJdbcCardTransactionJob/OracleJdbcCustomerDepositJob)
+     * to find or create the customer a transaction belongs to, keyed by the client ID Oracle
+     * reports. No uniqueness constraint on clientId at the DB level, so this could throw
+     * IncorrectResultSizeDataAccessException if two customers ever ended up with the same one
+     * — flagged, not silently assumed safe, same caveat as Institution.getByTinNumber. */
+    Optional<Customer> getByClientId(Integer clientId);
 
     /**
      * Bulk-marks every not-yet-allocated customer that appears in at least one

@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.5.16</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>nika.tax</groupId>
+  <artifactId>tax-reporter-v3</artifactId>
+  <version>0.1.0</version>
+  <name>tax-reporter-v3</name>
+  <description>Tax Reporter - card transaction ledger (Postgres + JPA + Thymeleaf + Spring Security)</description>
+
+  <properties>
+    <java.version>17</java.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-thymeleaf</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.thymeleaf.extras</groupId>
+      <artifactId>thymeleaf-extras-springsecurity6</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <!-- Secondary datasource: SQL Server, read-only lookup against the external Stamp table -->
+    <dependency>
+      <groupId>com.microsoft.sqlserver</groupId>
+      <artifactId>mssql-jdbc</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <!-- Excel export -->
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi</artifactId>
+      <version>5.2.5</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi-ooxml</artifactId>
+      <version>5.2.5</version>
+    </dependency>
+
+    <!-- PDF export -->
+    <dependency>
+      <groupId>com.github.librepdf</groupId>
+      <artifactId>openpdf</artifactId>
+      <version>1.3.30</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <optional>true</optional>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-devtools</artifactId>
+      <scope>runtime</scope>
+      <optional>true</optional>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <excludes>
+            <exclude>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+            </exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <!--
+    Build with `mvn clean package -Psp` or `-Poracle` (or `-Psp,oracle` for both together,
+    though see the note below on what that actually does with spring.profiles.active).
+
+    Each profile does two things:
+      1. Sets a `spring.profiles.active` property on the Maven build. This is a LABEL only —
+         Maven properties aren't automatically wired into the running app. For this to actually
+         activate a Spring profile at runtime, you still need either an application-sp.yml /
+         application-oracle.yml profile-specific config file AND to pass
+         -Dspring.profiles.active=sp (or the SPRING_PROFILES_ACTIVE env var) when actually
+         running the jar, or resource filtering enabled on application.yml to bake this Maven
+         property into it at build time (not set up here). Flagging this explicitly rather than
+         implying it's wired further than it actually is.
+      2. Overrides the build's finalName to include the profile id, so
+         `mvn package -Psp` produces target/tax-reporter-sp.jar instead of the default
+         target/tax-reporter-0.1.0.jar, and -Poracle produces tax-reporter-oracle.jar — this
+         part is fully wired and works as-is.
+
+    Scaffold only — I don't know what should actually differ between an "sp" build and an
+    "oracle" build beyond the jar name (different datasource config, different feature flags,
+    something else entirely), so the properties below are placeholders for you to extend, not a
+    complete environment-specific configuration.
+  -->
+  <profiles>
+    <profile>
+      <id>sp</id>
+      <properties>
+        <spring.profiles.active>sp</spring.profiles.active>
+      </properties>
+      <build>
+        <finalName>${project.artifactId}-sp</finalName>
+      </build>
+    </profile>
+    <profile>
+      <id>oracle</id>
+      <properties>
+        <spring.profiles.active>oracle</spring.profiles.active>
+      </properties>
+      <build>
+        <finalName>${project.artifactId}-oracle</finalName>
+      </build>
+    </profile>
+  </profiles>
+
+</project>

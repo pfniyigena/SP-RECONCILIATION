@@ -90,16 +90,16 @@
 
   .main{flex:1;min-width:0;padding:28px 32px 60px;}
 
+  .menu-toggle{
+    display:none;align-items:center;justify-content:center;
+    width:34px;height:34px;border-radius:var(--radius);border:1px solid var(--line-strong);
+    background:#fff;cursor:pointer;margin-right:10px;
+  }
   @media (max-width: 900px){
     .sidebar{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform 0.2s ease;z-index:50;box-shadow:2px 0 12px rgba(0,0,0,0.25);}
     .sidebar.open{transform:translateX(0);}
     .main{padding:16px;}
     .menu-toggle{display:inline-flex;}
-  }
-  .menu-toggle{
-    display:none;align-items:center;justify-content:center;
-    width:34px;height:34px;border-radius:var(--radius);border:1px solid var(--line-strong);
-    background:#fff;cursor:pointer;margin-right:10px;
   }
 </style>
 </th:block>

@@ -34,18 +34,34 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/login", "/access-denied", "/css/**", "/js/**", "/webjars/**").permitAll()
                 .requestMatchers("/api/v1/invoices/**").permitAll()
-                // Invoices has no customer relation to scope by, so ROLE_CUSTOMER_SCOPED
-                // deliberately doesn't get it — its whole purpose is "restricted to certain
-                // customers", and there's nothing to restrict here, so it's excluded rather
-                // than granted unrestricted access to a screen the role wasn't asked for.
-                .requestMatchers("/invoices/**").hasAnyRole("ADMIN", "ANALYST")
-                // Customer Deposits: same treatment as Invoices — Admin/Analyst only.
-                // ROLE_CUSTOMER_SCOPED doesn't get this even though CustomerDeposit does
-                // have a customer relation, since per-customer scoping for this entity
-                // wasn't part of what was asked for when this feature was added; extending
-                // ROLE_CUSTOMER_SCOPED here would need the same deliberate treatment
-                // CardTransaction got (query-level + direct-URL guards), not just a URL rule.
-                .requestMatchers("/customer-deposits/**").hasAnyRole("ADMIN", "ANALYST")
+                // Add/edit/update actions across every entity: ADMIN only. Must come before the
+                // broader per-entity rules below — Spring evaluates matchers in declaration
+                // order and uses the first match, so these more-specific write-action rules
+                // have to be listed first or the broader view-level rules would win instead.
+                // Scoped to the actual write endpoints (edit forms, "Mark as Processed",
+                // "fetch stamp data", the global deposit-matching run) — NOT reconciliation or
+                // the customer-scoped bulk "reconcile all matching" path, which got its own
+                // deliberate ROLE_CUSTOMER_SCOPED treatment earlier and isn't being undone here;
+                // reconciling isn't a per-record edit the way these are.
+                .requestMatchers("/transactions/*/edit", "/transactions/*/process").hasRole("ADMIN")
+                .requestMatchers("/invoices/*/edit", "/invoices/*/process").hasRole("ADMIN")
+                .requestMatchers("/customer-deposits/*/edit", "/customer-deposits/*/fetch-stamp-data", "/customer-deposits/match").hasRole("ADMIN")
+                // Invoices — now open to ROLE_CUSTOMER_SCOPED for viewing, but flagged clearly:
+                // TaxReporterInvoice has no customer relation to scope by (no FK to Customer,
+                // only loose clientTin/clientName string fields), so unlike CardTransaction or
+                // CustomerDeposit below, there's no query-level restriction possible here
+                // without inventing a new, fragile string-matching linkage. A scoped user
+                // granted this menu sees every invoice, same as Admin/Analyst — genuinely
+                // unrestricted, not scoped down. Worth knowing if that's not the intended
+                // outcome for a role whose whole purpose is being restricted.
+                .requestMatchers("/invoices/**").hasAnyRole("ADMIN", "ANALYST", "CUSTOMER_SCOPED")
+                // Customer Deposits — now open to ROLE_CUSTOMER_SCOPED too, WITH real
+                // query-level scoping this time (CustomerDepositSpecifications restricts the
+                // list/detail view to the caller's assigned customers, same restrictToCustomerIds
+                // pattern as CardTransaction, plus a direct-URL guard on the detail view) —
+                // this entity does have a customer relation, so unlike Invoices above, proper
+                // scoping was actually possible here.
+                .requestMatchers("/customer-deposits/**").hasAnyRole("ADMIN", "ANALYST", "CUSTOMER_SCOPED")
                 // Reconciliation: now open to ROLE_CUSTOMER_SCOPED too — scoping is enforced at
                 // the query/validation level instead (ReconciliationSpecifications restricts the
                 // list/detail view to batches composed ENTIRELY of the caller's assigned

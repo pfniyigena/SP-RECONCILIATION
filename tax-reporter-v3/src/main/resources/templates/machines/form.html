@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title th:text="${isEdit} ? 'Edit Terminal Machine — Tax Reporter' : 'New Terminal Machine — Tax Reporter'">New Terminal Machine</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<th:block th:replace="~{fragments/crud-styles :: crud}"></th:block>
+</head>
+<body>
+<div class="shell">
+  <aside th:replace="~{fragments/nav :: sidebar(active='machines')}"></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1 th:text="${isEdit} ? 'Edit Terminal Machine' : 'New Terminal Machine'">New Terminal Machine</h1>
+        <span class="sub" th:unless="${isEdit}">Register a new POS / terminal device</span>
+        <span class="sub" th:if="${isEdit}">Editing device</span>
+      </div>
+      <a class="btn btn-ghost" th:href="@{/machines}">← Back to machines</a>
+    </header>
+
+    <div class="crud-flash" th:if="${flashMessage}" th:text="${flashMessage}">Saved.</div>
+
+    <div class="crud-form-card">
+      <form th:action="${isEdit} ? @{/machines/{id}/edit(id=${form.id})} : @{/machines}" th:object="${form}" method="post">
+        <div class="alert-error-banner" th:if="${#fields.hasErrors('*')}">
+          Please correct the highlighted fields below before saving.
+        </div>
+        <input type="hidden" th:if="${isEdit}" th:field="*{id}">
+
+        <div class="crud-form-grid">
+          <div class="crud-field">
+            <label for="posName">POS name *</label>
+            <input type="text" id="posName" th:field="*{posName}"
+                   th:classappend="${#fields.hasErrors('posName')} ? 'field-error'">
+            <span class="error-text" th:if="${#fields.hasErrors('posName')}" th:errors="*{posName}">Required</span>
+          </div>
+          <div class="crud-field">
+            <label for="posId">POS ID</label>
+            <input type="number" id="posId" class="mono" th:field="*{posId}">
+          </div>
+          <div class="crud-field">
+            <label for="posNumber">POS number</label>
+            <input type="number" id="posNumber" class="mono" th:field="*{posNumber}">
+          </div>
+          <div class="crud-field">
+            <label for="sdcId">SDC ID</label>
+            <input type="text" id="sdcId" class="mono" th:field="*{sdcId}">
+          </div>
+          <div class="crud-field">
+            <label for="location">Location</label>
+            <input type="text" id="location" th:field="*{location}">
+          </div>
+          <div class="crud-field">
+            <label for="addressName">Address name</label>
+            <input type="text" id="addressName" th:field="*{addressName}">
+          </div>
+          <div class="crud-field">
+            <label for="addressDescription">Address description</label>
+            <input type="text" id="addressDescription" th:field="*{addressDescription}">
+          </div>
+          <div class="crud-field">
+            <label for="stampMachineId">Stamp machine</label>
+            <select id="stampMachineId" th:field="*{stampMachineId}">
+              <option value="">None</option>
+              <option th:each="s : ${stampMachines}" th:value="${s.id}" th:text="${s.serialNumber ?: s.id}">SN-00123</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="crud-checkbox-field" style="margin-top:18px;">
+          <input type="checkbox" id="enabled" th:field="*{enabled}">
+          <label for="enabled">Enabled</label>
+        </div>
+
+        <div class="crud-form-actions">
+          <a class="btn btn-ghost" th:href="@{/machines}">Cancel</a>
+          <button type="submit" class="btn btn-primary" th:text="${isEdit} ? 'Save changes' : 'Create machine'">Create machine</button>
+        </div>
+      </form>
+    </div>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!-- fragments/nav.html : sidebar, include as th:replace="~{fragments/nav :: sidebar(active='transactions')}" -->
+<aside xmlns:th="http://www.thymeleaf.org"
+       xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+       th:fragment="sidebar(active)" class="sidebar" id="sidebar">
+
+  <div class="sidebar-brand">
+    <div class="mark">Tax Reporter</div>
+    <div class="tag">Ledger Console</div>
+  </div>
+
+  <nav class="nav-group">
+    <div class="nav-section" sec:authorize="hasRole('ADMIN')">
+      <div class="nav-label">Overview</div>
+      <a class="nav-item" th:classappend="${active == 'dashboard'} ? 'active'"
+         th:href="@{/dashboard}">
+        <span class="glyph">◧</span> Dashboard
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Ledger</div>
+      <a class="nav-item" th:classappend="${active == 'transactions'} ? 'active'"
+         th:href="@{/transactions}">
+        <span class="glyph">≡</span> Transactions
+      </a>
+      <a class="nav-item" th:classappend="${active == 'invoices'} ? 'active'"
+         th:href="@{/invoices}" sec:authorize="hasAnyRole('ADMIN','ANALYST')">
+        <span class="glyph">🧾</span> Invoices
+      </a>
+      <a class="nav-item" th:classappend="${active == 'customerDeposits'} ? 'active'"
+         th:href="@{/customer-deposits}" sec:authorize="hasAnyRole('ADMIN','ANALYST')">
+        <span class="glyph">⛁</span> Customer Deposits
+      </a>
+      <a class="nav-item" th:classappend="${active == 'machines'} ? 'active'"
+         th:href="@{/machines}" sec:authorize="hasRole('ADMIN')">
+        <span class="glyph">▭</span> Terminal Machines
+      </a>
+      <a class="nav-item" th:classappend="${active == 'customers'} ? 'active'"
+         th:href="@{/customers}" sec:authorize="hasRole('ADMIN')">
+        <span class="glyph">☺</span> Customers
+      </a>
+      <a class="nav-item" th:classappend="${active == 'reconciliations'} ? 'active'"
+         th:href="@{/reconciliations}" sec:authorize="hasAnyRole('ADMIN','ANALYST','CUSTOMER_SCOPED')">
+        <span class="glyph">⇄</span> Reconciliation
+      </a>
+    </div>
+
+    <div class="nav-section" sec:authorize="hasRole('ADMIN')">
+      <div class="nav-label">Reporting</div>
+      <a class="nav-item" th:classappend="${active == 'reports'} ? 'active'"
+         th:href="@{/reports}">
+        <span class="glyph">▤</span> Reports
+      </a>
+    </div>
+
+    <div class="nav-section" sec:authorize="hasRole('ADMIN')">
+      <div class="nav-label">System</div>
+      <a class="nav-item" th:classappend="${active == 'institutions'} ? 'active'"
+         th:href="@{/institutions}">
+        <span class="glyph">🏛</span> Institutions
+      </a>
+      <a class="nav-item" th:classappend="${active == 'stampMachines'} ? 'active'"
+         th:href="@{/stamp-machines}">
+        <span class="glyph">◈</span> Stamp Machines
+      </a>
+      <a class="nav-item" th:classappend="${active == 'users'} ? 'active'"
+         th:href="@{/users}">
+        <span class="glyph">⚉</span> Users
+      </a>
+      <a class="nav-item" th:classappend="${active == 'jobs'} ? 'active'"
+         th:href="@{/jobs}">
+        <span class="glyph">▶</span> Jobs
+      </a>
+      <a class="nav-item" th:classappend="${active == 'maintenance'} ? 'active'"
+         th:href="@{/maintenance}">
+        <span class="glyph">⚙</span> Maintenance
+      </a>
+      <a class="nav-item" th:classappend="${active == 'settings'} ? 'active'"
+         th:href="@{/settings}">
+        <span class="glyph">⚏</span> Settings
+      </a>
+    </div>
+  </nav>
+
+  <div class="sidebar-foot">
+    <div class="user-chip">
+      <div class="user-avatar" th:text="${#strings.substring(#authentication.name,0,1).toUpperCase()}">U</div>
+      <div class="user-meta">
+        <div class="name" sec:authentication="name">j.uwimana</div>
+        <div class="role">
+          <span sec:authorize="hasRole('ADMIN')">Admin</span>
+          <span sec:authorize="hasRole('ANALYST')">Analyst</span>
+          <span sec:authorize="hasRole('CUSTOMER_SCOPED')">Customer-Scoped</span>
+        </div>
+      </div>
+    </div>
+    <a class="nav-item" th:classappend="${active == 'profile'} ? 'active'"
+       th:href="@{/profile}" style="margin-bottom:8px;">
+      <span class="glyph">⚙</span> My Profile
+    </a>
+    <form class="logout-form" th:action="@{/logout}" method="post">
+      <button type="submit" class="logout-link">⏻ Sign out</button>
+    </form>
+  </div>
+</aside>

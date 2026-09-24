@@ -104,7 +104,7 @@ public class CustomerDepositMatchingService {
      * duplicate logging, no separate result-message building the way the two button endpoints
      * do for their flash messages, since there's no request/response here to show one to.
      */
-    @Scheduled(cron = "${deposit-matching.cron.expression}")
+    @Scheduled(cron = "${allocate.cron.expression}")
     public void scheduledMatchAll() {
         matchAll();
     }

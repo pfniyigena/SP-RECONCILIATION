@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: tax-reporter-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tax_reporter
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: changeme
+    ports:
+      - "5434:5432"
+    volumes:
+      - tax_reporter_data:/var/lib/postgresql/data
+
+volumes:
+  tax_reporter_data:

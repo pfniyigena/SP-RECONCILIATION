@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title>My Profile — Tax Reporter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<th:block th:replace="~{fragments/crud-styles :: crud}"></th:block>
+<style>
+  .profile-section-title{
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13.5px;color:var(--ink);
+    text-transform:uppercase;letter-spacing:0.05em;padding-bottom:8px;margin:22px 0 16px;border-bottom:1px solid var(--line);
+  }
+  .profile-section-title:first-of-type{margin-top:0;}
+  .username-display{
+    font-family:'IBM Plex Mono',monospace;font-size:13.8px;color:var(--ink-soft);
+    padding:9px 11px;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside th:replace="~{fragments/nav :: sidebar(active='profile')}"></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1>My Profile</h1>
+        <span class="sub">Account settings</span>
+      </div>
+      <a class="btn btn-ghost" th:href="@{/transactions}">← Back to ledger</a>
+    </header>
+
+    <div class="crud-flash" th:if="${flashMessage}" th:text="${flashMessage}">Password updated.</div>
+
+    <div class="crud-form-card" style="max-width:520px;">
+
+      <div class="profile-section-title">Account</div>
+      <div class="crud-field">
+        <label>Username</label>
+        <div class="username-display" th:text="${username}">j.uwimana</div>
+      </div>
+
+      <div class="profile-section-title">Change password</div>
+
+      <form th:action="@{/profile/password}" th:object="${form}" method="post" autocomplete="off">
+        <div class="alert-error-banner" th:if="${#fields.hasErrors('*')}">
+          Please correct the highlighted fields below before saving.
+        </div>
+        <div class="crud-form-grid">
+          <div class="crud-field">
+            <label for="currentPassword">Current password *</label>
+            <input type="password" id="currentPassword" th:field="*{currentPassword}" autocomplete="current-password"
+                   th:classappend="${#fields.hasErrors('currentPassword')} ? 'field-error'">
+            <span class="error-text" th:if="${#fields.hasErrors('currentPassword')}" th:errors="*{currentPassword}">Required</span>
+          </div>
+          <div class="crud-field">
+            <label for="newPassword">New password *</label>
+            <input type="password" id="newPassword" th:field="*{newPassword}" autocomplete="new-password"
+                   th:classappend="${#fields.hasErrors('newPassword')} ? 'field-error'">
+            <span class="error-text" th:if="${#fields.hasErrors('newPassword')}" th:errors="*{newPassword}">Required</span>
+            <span class="hint">At least 8 characters, different from your current password.</span>
+          </div>
+          <div class="crud-field">
+            <label for="confirmPassword">Confirm new password *</label>
+            <input type="password" id="confirmPassword" th:field="*{confirmPassword}" autocomplete="new-password"
+                   th:classappend="${#fields.hasErrors('confirmPassword')} ? 'field-error'">
+            <span class="error-text" th:if="${#fields.hasErrors('confirmPassword')}" th:errors="*{confirmPassword}">Required</span>
+          </div>
+        </div>
+
+        <div class="crud-form-actions">
+          <button type="submit" class="btn btn-primary">Update password</button>
+        </div>
+      </form>
+    </div>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title th:text="${isEdit} ? 'Edit User — Tax Reporter' : 'New User — Tax Reporter'">New User</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<th:block th:replace="~{fragments/crud-styles :: crud}"></th:block>
+<th:block th:replace="~{fragments/dropdown :: styles}"></th:block>
+<style>
+  .customer-scope-hint{font-size:12px;color:var(--ink-faint);margin-top:6px;}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside th:replace="~{fragments/nav :: sidebar(active='users')}"></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1 th:text="${isEdit} ? 'Edit User' : 'New User'">New User</h1>
+        <span class="sub" th:unless="${isEdit}">Create a new console account</span>
+        <span class="sub" th:if="${isEdit}">Editing account</span>
+      </div>
+      <a class="btn btn-ghost" th:href="@{/users}">← Back to users</a>
+    </header>
+
+    <div class="crud-flash" th:if="${flashMessage}" th:text="${flashMessage}">Saved.</div>
+
+    <div class="crud-form-card">
+      <form th:action="${isEdit} ? @{/users/{id}/edit(id=${form.id})} : @{/users}" th:object="${form}" method="post" autocomplete="off">
+        <div class="alert-error-banner" th:if="${#fields.hasErrors('*')}">
+          Please correct the highlighted fields below before saving.
+        </div>
+        <input type="hidden" th:if="${isEdit}" th:field="*{id}">
+
+        <div class="crud-form-grid">
+          <div class="crud-field">
+            <label for="username">Username *</label>
+            <input type="text" id="username" class="mono" th:field="*{username}" autocomplete="off"
+                   th:classappend="${#fields.hasErrors('username')} ? 'field-error'">
+            <span class="error-text" th:if="${#fields.hasErrors('username')}" th:errors="*{username}">Required</span>
+          </div>
+          <div class="crud-field">
+            <label for="fullName">Full name</label>
+            <input type="text" id="fullName" th:field="*{fullName}">
+          </div>
+          <div class="crud-field">
+            <label for="role">Role *</label>
+            <select id="role" th:field="*{role}">
+              <option value="ROLE_ADMIN">Admin</option>
+              <option value="ROLE_ANALYST">Analyst</option>
+              <option value="ROLE_CUSTOMER_SCOPED">Customer-Scoped</option>
+            </select>
+          </div>
+          <div class="crud-field">
+            <label for="password">
+              Password <span th:unless="${isEdit}">*</span>
+            </label>
+            <input type="password" id="password" th:field="*{password}" autocomplete="new-password"
+                   th:classappend="${#fields.hasErrors('password')} ? 'field-error'">
+            <span class="error-text" th:if="${#fields.hasErrors('password')}" th:errors="*{password}">Required</span>
+            <span class="hint" th:if="${isEdit}">Leave blank to keep the current password.</span>
+            <span class="hint" th:unless="${isEdit}">At least 8 characters.</span>
+          </div>
+          <div class="crud-field checkbox-dropdown" data-all-label="No customers assigned" data-noun="customers assigned">
+            <label>Accessible customers</label>
+            <button type="button" class="dropdown-toggle">
+              <span class="dropdown-label">No customers assigned</span>
+              <span class="chevron">▾</span>
+            </button>
+            <div class="dropdown-panel" hidden>
+              <input type="text" class="dropdown-search" placeholder="Search customers…">
+              <div class="dropdown-actions">
+                <button type="button" data-action="select-all">Select all</button>
+                <button type="button" data-action="clear">Clear</button>
+              </div>
+              <div class="dropdown-list">
+                <label class="dropdown-option" th:each="c : ${customers}">
+                  <input type="checkbox" name="accessibleCustomerIds" th:value="${c.id}"
+                         th:checked="${form.accessibleCustomerIds != null and form.accessibleCustomerIds.contains(c.id)}">
+                  <span th:text="${(c.clientName ?: 'Unnamed') + (c.clientTin != null ? ' — TIN ' + c.clientTin : '')}">KAMANA Eric — TIN 123456789</span>
+                </label>
+                <div class="dropdown-option-empty" hidden>No customers match "<span class="search-echo"></span>"</div>
+              </div>
+            </div>
+            <div class="customer-scope-hint">Only enforced when Role is set to Customer-Scoped — ignored for Admin/Analyst.</div>
+          </div>
+        </div>
+
+        <div class="crud-checkbox-field" style="margin-top:18px;">
+          <input type="checkbox" id="enabled" th:field="*{enabled}">
+          <label for="enabled">Enabled</label>
+        </div>
+
+        <div class="crud-form-actions">
+          <a class="btn btn-ghost" th:href="@{/users}">Cancel</a>
+          <button type="submit" class="btn btn-primary" th:text="${isEdit} ? 'Save changes' : 'Create user'">Create user</button>
+        </div>
+      </form>
+    </div>
+  </main>
+</div>
+<th:block th:replace="~{fragments/dropdown :: script}"></th:block>
+</body>
+</html>

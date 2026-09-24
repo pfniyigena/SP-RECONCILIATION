@@ -178,7 +178,7 @@ public class TaxReporterInvoiceExportService {
             meta.setSpacingAfter(14);
             document.add(meta);
 
-            String[] pdfHeaders = {"Stamp Date", "Registered Name", "Client Name", "Client TIN",
+            String[] pdfHeaders = {"Stamp Date", "Plate Number", "Client Name", "Client TIN",
                     "Receipt #", "Stamp Number", "Total Amount", "Payment Mode", "Status"};
             float[] widths = {1.9f, 1.9f, 1.9f, 1.4f, 1.2f, 1.6f, 1.4f, 1.4f, 1.2f};
 
@@ -199,7 +199,7 @@ public class TaxReporterInvoiceExportService {
             com.lowagie.text.Font cellFont = FontFactory.getFont(FontFactory.HELVETICA, 8.5f);
             for (TaxReporterInvoice inv : page.getContent()) {
                 addCell(table, inv.getStampDate() != null ? inv.getStampDate().format(DATE_FMT) : "—", cellFont);
-                addCell(table, orDash(inv.getRegisteredName()), cellFont);
+                addCell(table, orDash(inv.getPlateNumber()), cellFont);
                 addCell(table, orDash(inv.getClientName()), cellFont);
                 addCell(table, orDash(inv.getClientTin()), cellFont);
                 addCell(table, inv.getReceiptNumber() != null ? inv.getReceiptNumber().toString() : "—", cellFont);

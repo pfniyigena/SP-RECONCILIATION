@@ -106,7 +106,8 @@ public class TaxReporterInvoiceService {
                 TaxReporterInvoice invoice = toInvoice(invoiceDto);
                 return repository.save(invoice);
             } else {
-                return exist;
+                exist.setPlateNumber(invoiceDto.getPlateNumber());
+                return repository.save(exist);
             }
         } catch (Exception e) {
             log.error("createInvoice:{}", e.getMessage(), e);

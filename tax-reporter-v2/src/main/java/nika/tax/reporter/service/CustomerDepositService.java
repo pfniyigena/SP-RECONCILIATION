@@ -18,6 +18,8 @@ import nika.tax.reporter.postgres.domain.CustomerDeposit;
 import nika.tax.reporter.postgres.domain.DepositCardTransaction;
 import nika.tax.reporter.repository.CustomerDepositRepository;
 import nika.tax.reporter.repository.DepositCardTransactionRepository;
+import nika.tax.reporter.sqlserver.exception.StampLookupException;
+import nika.tax.reporter.sqlserver.service.StampLookupService;
 
 @Service
 @RequiredArgsConstructor

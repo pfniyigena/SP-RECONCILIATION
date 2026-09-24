@@ -4,8 +4,8 @@ import java.awt.Color;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -53,7 +53,7 @@ public class CardTransactionExportService {
 
     private static final String[] HEADERS = {
         "Date / Time", "Client", "Client ID", "Card Number", "Plate Number",
-        "POS Name", "POS Number", "Service", "SDC ID", "Stamp Number", "EBM Number", "Quantity", "Unit Price",
+        "POS Name", "POS Number", "Service", "SDC ID", "Stamp Number", "EBM Number", "Allocated Amount", "Allocated Quantity", "Quantity", "Unit Price",
         "Total Amount", "Status", "Transaction GUID"
     };
 
@@ -61,31 +61,24 @@ public class CardTransactionExportService {
     private final DepositCardTransactionRepository depositCardTransactionRepository;
 
     /**
-     * Bulk lookup, one query per page/batch rather than one per row. CardTransaction.getEbmNumber()
-     * walks the depositAllocations collection directly, which is fine for a single transaction
-     * detail page but would trigger lazy-loading per row here (export queries don't go through
-     * CardTransactionRepository.findWithAllocationsById's @EntityGraph) — an N+1 query pattern
-     * across what can be a very large export. Mirrors getEbmNumber()'s own "first allocation
-     * with a deposit that has a stamp number" logic, just computed for a whole batch at once.
+     * Bulk lookup, one query per page/batch rather than one per row — same reasoning as the
+     * earlier ebmNumber-only version this replaces (avoids N+1 lazy-loading on
+     * depositAllocations, since export queries don't go through
+     * CardTransactionRepository.findWithAllocationsById's @EntityGraph).
+     *
+     * Returns EVERY allocation per transaction, not just the first — a transaction split
+     * across multiple deposits now gets one export row per allocation (see writeExcel/
+     * writePdf), each with that specific allocation's own ebmNumber and allocatedAmount,
+     * rather than collapsing to a single row that could only ever show one deposit's stamp
+     * number even when the transaction was actually funded by several.
      */
-    private Map<UUID, String> buildEbmNumberMap(List<CardTransaction> transactions) {
+    private Map<UUID, List<DepositCardTransaction>> buildAllocationsMap(List<CardTransaction> transactions) {
         List<UUID> ids = transactions.stream().map(CardTransaction::getId).collect(Collectors.toList());
         if (ids.isEmpty()) {
             return Map.of();
         }
         List<DepositCardTransaction> allocations = depositCardTransactionRepository.findByTransaction_IdIn(ids);
-        Map<UUID, String> ebmNumbers = new HashMap<>();
-        for (DepositCardTransaction allocation : allocations) {
-            UUID txId = allocation.getTransaction().getId();
-            if (ebmNumbers.containsKey(txId)) {
-                continue; // already resolved from an earlier allocation for this transaction
-            }
-            String stampNumber = allocation.getDeposit() != null ? allocation.getDeposit().getStampNumber() : null;
-            if (stampNumber != null) {
-                ebmNumbers.put(txId, stampNumber);
-            }
-        }
-        return ebmNumbers;
+        return allocations.stream().collect(Collectors.groupingBy(a -> a.getTransaction().getId()));
     }
 
     // ---------------------------------------------------------------- Excel
@@ -126,10 +119,19 @@ public class CardTransactionExportService {
             Page<CardTransaction> page;
             do {
                 page = repository.findAll(spec, PageRequest.of(pageIndex, EXCEL_BATCH_SIZE, sort));
-                Map<UUID, String> ebmNumbers = buildEbmNumberMap(page.getContent());
+                Map<UUID, List<DepositCardTransaction>> allocationsByTx = buildAllocationsMap(page.getContent());
                 for (CardTransaction tx : page.getContent()) {
-                    Row row = sheet.createRow(rowNum++);
-                    writeRow(row, tx, amountStyle, dateStyle, ebmNumbers.get(tx.getId()));
+                    List<DepositCardTransaction> allocations = allocationsByTx.getOrDefault(tx.getId(), List.of());
+                    if (allocations.isEmpty()) {
+                        Row row = sheet.createRow(rowNum++);
+                        writeRow(row, tx, amountStyle, dateStyle, null, null);
+                    } else {
+                        for (DepositCardTransaction allocation : allocations) {
+                            Row row = sheet.createRow(rowNum++);
+                            String ebmNumber = allocation.getDeposit() != null ? allocation.getDeposit().getStampNumber() : null;
+                            writeRow(row, tx, amountStyle, dateStyle, ebmNumber, allocation.getAllocatedAmount());
+                        }
+                    }
                 }
                 pageIndex++;
             } while (page.hasNext());
@@ -143,7 +145,7 @@ public class CardTransactionExportService {
         }
     }
 
-    private void writeRow(Row row, CardTransaction tx, CellStyle amountStyle, CellStyle dateStyle, String ebmNumber) {
+    private void writeRow(Row row, CardTransaction tx, CellStyle amountStyle, CellStyle dateStyle, String ebmNumber, BigDecimal allocatedAmount) {
         int col = 0;
 
         if (tx.getDateTimeTransaction() != null) {
@@ -162,11 +164,25 @@ public class CardTransactionExportService {
         setString(row, col++, tx.getSdcId());
         setString(row, col++, tx.getStampNumber());
         setString(row, col++, ebmNumber);
+        setDecimal(row, col++, allocatedAmount, amountStyle);
+        setDecimal(row, col++, computeAllocatedQuantity(allocatedAmount, tx.getUnitPrice()), amountStyle);
         setDecimal(row, col++, tx.getQuantity(), amountStyle);
         setDecimal(row, col++, tx.getUnitPrice(), amountStyle);
         setDecimal(row, col++, tx.getTotalAmount(), amountStyle);
         setString(row, col++, statusLabel(tx));
         setString(row, col++, tx.getTransactionGuid());
+    }
+
+    /** allocatedAmount / CardTransaction.unitPrice — how much of the transaction's quantity
+     * this one allocation actually covers, in the same units as tx.getQuantity() (e.g. liters,
+     * if unitPrice is per-liter). Null whenever the division isn't meaningful: no allocation on
+     * this row (allocatedAmount null), or unitPrice missing or zero — never throws
+     * ArithmeticException for a divide-by-zero, which BigDecimal.divide would otherwise do. */
+    private BigDecimal computeAllocatedQuantity(BigDecimal allocatedAmount, BigDecimal unitPrice) {
+        if (allocatedAmount == null || unitPrice == null || unitPrice.compareTo(BigDecimal.ZERO) == 0) {
+            return null;
+        }
+        return allocatedAmount.divide(unitPrice, 4, RoundingMode.HALF_UP);
     }
 
     private void setString(Row row, int col, String value) {
@@ -221,8 +237,8 @@ public class CardTransactionExportService {
             document.add(meta);
 
             String[] pdfHeaders = {"Date / Time", "Client", "Card Number", "Plate Number",
-                    "POS Name", "Service", "SDC ID", "Stamp Number", "EBM Number", "Total Amount", "Status"};
-            float[] widths = {2.0f, 1.8f, 1.5f, 1.3f, 1.8f, 1.6f, 1.4f, 1.6f, 1.6f, 1.5f, 1.1f};
+                    "POS Name", "Service", "SDC ID", "Stamp Number", "EBM Number", "Allocated Amount", "Allocated Qty", "Total Amount", "Status"};
+            float[] widths = {2.0f, 1.8f, 1.5f, 1.3f, 1.8f, 1.6f, 1.4f, 1.6f, 1.6f, 1.5f, 1.3f, 1.5f, 1.1f};
 
             PdfPTable table = new PdfPTable(pdfHeaders.length);
             table.setWidthPercentage(100);
@@ -239,19 +255,17 @@ public class CardTransactionExportService {
             }
 
             com.lowagie.text.Font cellFont = FontFactory.getFont(FontFactory.HELVETICA, 8.5f);
-            Map<UUID, String> ebmNumbers = buildEbmNumberMap(page.getContent());
+            Map<UUID, List<DepositCardTransaction>> allocationsByTx = buildAllocationsMap(page.getContent());
             for (CardTransaction tx : page.getContent()) {
-                addCell(table, tx.getDateTimeTransaction() != null ? tx.getDateTimeTransaction().format(DATE_FMT) : "—", cellFont);
-                addCell(table, orDash(tx.getClientName()), cellFont);
-                addCell(table, orDash(tx.getCardNumber()), cellFont);
-                addCell(table, orDash(tx.getPlateNumber()), cellFont);
-                addCell(table, orDash(tx.getPosName()), cellFont);
-                addCell(table, orDash(tx.getServiceName()), cellFont);
-                addCell(table, orDash(tx.getSdcId()), cellFont);
-                addCell(table, orDash(tx.getStampNumber()), cellFont);
-                addCell(table, orDash(ebmNumbers.get(tx.getId())), cellFont);
-                addCell(table, tx.getTotalAmount() != null ? String.format("%,.2f", tx.getTotalAmount()) : "—", cellFont);
-                addCell(table, statusLabel(tx), cellFont);
+                List<DepositCardTransaction> allocations = allocationsByTx.getOrDefault(tx.getId(), List.of());
+                if (allocations.isEmpty()) {
+                    addTxRow(table, tx, null, null, cellFont);
+                } else {
+                    for (DepositCardTransaction allocation : allocations) {
+                        String ebmNumber = allocation.getDeposit() != null ? allocation.getDeposit().getStampNumber() : null;
+                        addTxRow(table, tx, ebmNumber, allocation.getAllocatedAmount(), cellFont);
+                    }
+                }
             }
 
             document.add(table);
@@ -261,6 +275,23 @@ public class CardTransactionExportService {
         }
 
         return truncated;
+    }
+
+    private void addTxRow(PdfPTable table, CardTransaction tx, String ebmNumber, BigDecimal allocatedAmount, com.lowagie.text.Font cellFont) {
+        addCell(table, tx.getDateTimeTransaction() != null ? tx.getDateTimeTransaction().format(DATE_FMT) : "—", cellFont);
+        addCell(table, orDash(tx.getClientName()), cellFont);
+        addCell(table, orDash(tx.getCardNumber()), cellFont);
+        addCell(table, orDash(tx.getPlateNumber()), cellFont);
+        addCell(table, orDash(tx.getPosName()), cellFont);
+        addCell(table, orDash(tx.getServiceName()), cellFont);
+        addCell(table, orDash(tx.getSdcId()), cellFont);
+        addCell(table, orDash(tx.getStampNumber()), cellFont);
+        addCell(table, orDash(ebmNumber), cellFont);
+        addCell(table, allocatedAmount != null ? String.format("%,.2f", allocatedAmount) : "—", cellFont);
+        BigDecimal allocatedQuantity = computeAllocatedQuantity(allocatedAmount, tx.getUnitPrice());
+        addCell(table, allocatedQuantity != null ? String.format("%,.4f", allocatedQuantity) : "—", cellFont);
+        addCell(table, tx.getTotalAmount() != null ? String.format("%,.2f", tx.getTotalAmount()) : "—", cellFont);
+        addCell(table, statusLabel(tx), cellFont);
     }
 
     private void addCell(PdfPTable table, String text, com.lowagie.text.Font font) {

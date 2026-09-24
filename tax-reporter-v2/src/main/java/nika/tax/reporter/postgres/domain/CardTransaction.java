@@ -121,8 +121,22 @@ public class CardTransaction extends AbstractEntity {
 	@Transient
 	@Getter(AccessLevel.NONE)
 	private String stampNumber;
+	/**
+	 * @ToString.Exclude here, not on depositAllocations (which already has it) — Lombok's
+	 * generated toString(), for each field, looks for a matching get<Field>() method and
+	 * calls it INSTEAD of the field directly if one exists, regardless of whether that
+	 * method was Lombok-generated or hand-written. @Getter(AccessLevel.NONE) below only
+	 * stops Lombok from AUTO-GENERATING a getter for this field — it does nothing to stop
+	 * toString() from finding and calling the hand-written getEbmNumber() method further
+	 * down this class, which iterates depositAllocations directly. That's the actual call
+	 * chain that threw LazyInitializationException on a detached entity: toString() ->
+	 * getEbmNumber() -> depositAllocations iteration — not direct field access to the
+	 * (already-excluded) collection itself. Confirmed as a real, reported production crash,
+	 * not a hypothetical.
+	 */
 	@Transient
 	@Getter(AccessLevel.NONE)
+	@ToString.Exclude
 	private String ebmNumber;
 
 	public String getStampNumber() {

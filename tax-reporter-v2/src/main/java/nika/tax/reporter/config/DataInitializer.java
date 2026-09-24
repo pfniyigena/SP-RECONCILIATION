@@ -17,7 +17,7 @@ import nika.tax.reporter.repository.CustomerRepository;
  * Creates a single default admin account the first time the app boots
  * against an empty app_user table, so there is a way to log in out of
  * the box. Change this password immediately in a real environment —
- * see application.yml (app.default-admin.password / DEFAULT_ADMIN_PASSWORD env var).
+ * see application.properties (app.default-admin.password / DEFAULT_ADMIN_PASSWORD env var).
  */
 @Configuration
 @RequiredArgsConstructor

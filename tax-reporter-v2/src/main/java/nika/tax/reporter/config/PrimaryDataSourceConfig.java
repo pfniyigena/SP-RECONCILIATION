@@ -2,8 +2,9 @@ package nika.tax.reporter.config;
 
 import javax.sql.DataSource;
 
-import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -11,51 +12,61 @@ import org.springframework.context.annotation.Primary;
 import com.zaxxer.hikari.HikariDataSource;
 
 /**
- * Explicitly defines the primary (Postgres) DataSource bean. This became necessary the moment
- * StampJdbcConfig (and, in the real app, OracleJdbcConfig) defined their own secondary
- * DataSource beans — Spring Boot's own DataSourceAutoConfiguration is guarded by
- * @ConditionalOnMissingBean(DataSource.class), a TYPE-based check, not a name-based one. Once
- * ANY bean of type DataSource exists anywhere in the context, Spring Boot sees that condition
- * as already satisfied and skips creating its own primary datasource entirely, regardless of
- * what the existing bean is actually named or what it's meant to be used for.
+ * Explicitly defines the primary (Postgres) DataSource bean — required because Spring Boot's
+ * own DataSourceAutoConfiguration backs off entirely once any DataSource-typed bean exists
+ * anywhere in the context (StampJdbcConfig defines one), a type-based @ConditionalOnMissingBean
+ * check, not a name-based one. Full history of why this class exists at all is in its own
+ * earlier commit — the short version: without it, an unreachable SQL Server could take down
+ * the whole app even though Postgres was fine, because Spring Boot never created its own
+ * primary datasource to fall back to.
  *
- * This is what caused two failures in sequence, not one:
- *   1. With only stampDataSource present and no primary bean ever created, Hibernate had
- *      exactly one DataSource to use and used it — so a downed SQL Server took the whole app
- *      down, even though Postgres itself was fine the whole time.
- *   2. After stampDataSource was excluded from autowiring (@Bean(autowireCandidate = false)),
- *      there were then ZERO DataSource beans available for anything — "No qualifying bean of
- *      type DataSource" — because the real fix was never applied: the primary bean still
- *      didn't exist.
+ * REBUILT after seeing the real app's actual property structure:
+ * spring.datasource.postgres.jdbc-url/username/password/driver-class-name for connection
+ * info, and a SEPARATE, NESTED spring.datasource.postgres.hikari.* for pool tuning (this
+ * project's application.properties keeps that pool-tuning block in the shared base file,
+ * since it applies across every profile; connection info lives in each application-{profile}
+ * file). That nested "hikari." sub-key is structurally different from
+ * spring.datasource.stamp.* (StampJdbcConfig), which is flat with no such nesting.
  *
- * Uses the DataSourceProperties intermediary (not a raw @ConfigurationProperties binding
- * directly onto HikariDataSource, the way the secondary datasources are built) specifically
- * because application.yml's spring.datasource.* already uses `url`, not `jdbc-url` — Spring's
- * own DataSourceProperties/initializeDataSourceBuilder() correctly translates that to whatever
- * the target implementation actually needs (HikariDataSource.setJdbcUrl()); binding directly
- * onto a raw HikariDataSource does not get that translation and would require renaming the
- * existing, already-working `url` property to `jdbc-url` — a needless breaking change here.
+ * This matters because a single @ConfigurationProperties("spring.datasource.postgres") bound
+ * directly onto a raw HikariDataSource — the same simple pattern StampJdbcConfig correctly
+ * uses for ITS flat properties — would NOT correctly bind the nested hikari.* properties here:
+ * HikariDataSource has no property literally called "hikari", so Spring's binder would just
+ * silently skip anything under that path, and the datasource would quietly fall back to
+ * Hikari's own default pool size (10) instead of the tuned settings in application.properties
+ * (max 20, min-idle 5, etc.) — no error, no warning, just wrong pool sizing in production.
  *
- * @Primary on both beans below: belt-and-suspenders alongside stampDataSource's
- * autowireCandidate=false — either mechanism alone would have been enough, but having both
- * means this can't silently regress if one of the two is ever changed without the other.
+ * Fixed with two layered bindings on the SAME underlying HikariDataSource: the first binds
+ * spring.datasource.postgres (connection info — jdbc-url/username/password/driver-class-name,
+ * which happen to be real HikariDataSource property names, so this part binds correctly even
+ * without any translation), the second binds spring.datasource.postgres.hikari (pool tuning)
+ * onto that same instance as a distinct bean definition. Both @ConfigurationProperties
+ * annotations apply to whatever the method returns, regardless of whether it constructs a new
+ * object or (like the second method here) just returns an existing one passed in — the
+ * binding is driven by the bean definition, not by what the method body does.
+ *
+ * @Primary is on the final dataSource bean only, not the intermediate one — dataSourceBase
+ * stays reachable by explicit @Qualifier (required for the second method's own wiring) without
+ * competing for unqualified DataSource injection, since @Primary already resolves that
+ * ambiguity correctly (confirmed safe the same way stampDataSource's @Qualifier usages are —
+ * see StampJdbcConfig's own history for why autowireCandidate=false was tried and reverted
+ * instead of relying on @Primary alone).
  */
 @Configuration
 public class PrimaryDataSourceConfig {
 
-    @Bean
-    @Primary
-    @ConfigurationProperties("spring.datasource")
-    public DataSourceProperties dataSourceProperties() {
-        return new DataSourceProperties();
+    @Bean(name = "dataSourceBase")
+    @ConfigurationProperties("spring.datasource.postgres")
+    public HikariDataSource dataSourceBase() {
+        return DataSourceBuilder.create()
+                .type(HikariDataSource.class)
+                .build();
     }
 
     @Bean(name = "dataSource")
     @Primary
-    @ConfigurationProperties("spring.datasource.hikari")
-    public DataSource dataSource(DataSourceProperties properties) {
-        return properties.initializeDataSourceBuilder()
-                .type(HikariDataSource.class)
-                .build();
+    @ConfigurationProperties("spring.datasource.postgres.hikari")
+    public DataSource dataSource(@Qualifier("dataSourceBase") HikariDataSource dataSourceBase) {
+        return dataSourceBase;
     }
 }

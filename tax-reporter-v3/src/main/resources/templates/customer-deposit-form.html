@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title th:text="${isEdit} ? 'Edit Deposit' : 'New Deposit'">New Deposit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<th:block th:replace="~{fragments/crud-styles :: crud}"></th:block>
+</head>
+<body>
+<div class="shell">
+  <aside th:replace="~{fragments/nav :: sidebar(active='customerDeposits')}"></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div style="display:flex;align-items:baseline;gap:12px;">
+        <button class="menu-toggle" type="button" aria-label="Toggle menu">☰</button>
+        <div>
+          <h1 th:text="${isEdit} ? 'Edit Deposit' : 'New Deposit'">New Deposit</h1>
+          <span class="sub" th:unless="${isEdit}">Create a customer deposit record</span>
+          <span class="sub" th:if="${isEdit}">Editing deposit</span>
+        </div>
+      </div>
+      <a class="btn btn-ghost" th:href="@{/customer-deposits}">← Back to deposits</a>
+    </header>
+
+    <div class="crud-flash" th:if="${flashMessage}" th:text="${flashMessage}">Saved.</div>
+
+    <div class="crud-form-card">
+      <form th:action="${isEdit} ? @{/customer-deposits/{id}/edit(id=${form.id})} : @{/customer-deposits}" th:object="${form}" method="post">
+        <div class="alert-error-banner" th:if="${#fields.hasErrors('*')}">
+          Please correct the highlighted fields below before saving.
+        </div>
+        <input type="hidden" th:if="${isEdit}" th:field="*{id}">
+
+        <div class="crud-form-grid">
+          <div class="crud-field">
+            <label for="dateTimeTransaction">Date / Time</label>
+            <input type="datetime-local" id="dateTimeTransaction" th:field="*{dateTimeTransaction}">
+          </div>
+          <div class="crud-field">
+            <label for="clientName">Client name</label>
+            <input type="text" id="clientName" th:field="*{clientName}">
+          </div>
+          <div class="crud-field">
+            <label for="serviceName">Service name</label>
+            <input type="text" id="serviceName" th:field="*{serviceName}">
+          </div>
+          <div class="crud-field">
+            <label for="totalAmount">Total amount</label>
+            <input type="number" step="0.01" id="totalAmount" th:field="*{totalAmount}">
+          </div>
+          <div class="crud-field">
+            <label for="clientId">Client ID (legacy)</label>
+            <input type="number" id="clientId" class="mono" th:field="*{clientId}">
+          </div>
+          <div class="crud-field">
+            <label for="serviceId">Service ID (legacy)</label>
+            <input type="number" id="serviceId" class="mono" th:field="*{serviceId}">
+          </div>
+          <div class="crud-field">
+            <label for="transactionGuid">Transaction GUID</label>
+            <input type="text" id="transactionGuid" class="mono" th:field="*{transactionGuid}" placeholder="Leave blank to auto-generate">
+          </div>
+          <div class="crud-field">
+            <label for="sapReference">SAP reference</label>
+            <input type="text" id="sapReference" class="mono" th:field="*{sapReference}">
+          </div>
+          <div class="crud-field">
+            <label for="stampData">Stamp data</label>
+            <input type="text" id="stampData" class="mono" th:field="*{stampData}" placeholder="e.g. 00123,45678,checksum,99999">
+            <span class="hint">Format: 4 comma-separated segments — the stamp number below is segments 1, 2, and 4 joined with "/", derived automatically.</span>
+          </div>
+          <div class="crud-field">
+            <label for="stampNumberPreview">Stamp number <span class="hint" style="text-transform:none;">(read-only, derived)</span></label>
+            <input type="text" id="stampNumberPreview" class="mono" disabled style="background:#F3F2EE;color:var(--ink-soft);">
+          </div>
+        </div>
+
+        <div class="crud-checkbox-field" style="margin-top:18px;">
+          <input type="checkbox" id="processed" th:field="*{processed}">
+          <label for="processed">Processed</label>
+        </div>
+
+        <div class="crud-form-actions">
+          <a class="btn btn-ghost" th:href="@{/customer-deposits}">Cancel</a>
+          <button type="submit" class="btn btn-primary" th:text="${isEdit} ? 'Save changes' : 'Create deposit'">Create deposit</button>
+        </div>
+      </form>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Delegated wiring — no inline onclick/oninput. Same CSP-safe pattern used
+  // throughout this project after the earlier incident on the Transactions page.
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.menu-toggle')) {
+      document.getElementById('sidebar').classList.toggle('open');
+    }
+  });
+
+  document.addEventListener('input', (e) => {
+    if (e.target.id === 'stampData') {
+      updateStampPreview();
+    }
+  });
+
+  // Mirrors CustomerDeposit.getStampNumber(): stampData is "a,b,c,d..." and the
+  // derived stamp number is parts[0] + "/" + parts[1] + "/" + parts[3] — the
+  // first two segments plus whatever follows the 3rd comma. Preview only — the
+  // server recomputes this from stampData on every read, same guard against
+  // short/malformed data as the entity's own getter.
+  function updateStampPreview(){
+    const raw = document.getElementById('stampData').value;
+    const preview = document.getElementById('stampNumberPreview');
+    if (!raw || !raw.trim()) {
+      preview.value = '';
+      return;
+    }
+    const c1 = raw.indexOf(',');
+    const c2 = c1 !== -1 ? raw.indexOf(',', c1 + 1) : -1;
+    const c3 = c2 !== -1 ? raw.indexOf(',', c2 + 1) : -1;
+    if (c1 === -1 || c2 === -1 || c3 === -1) {
+      preview.value = '(not enough data yet — expects at least 4 comma-separated segments)';
+      return;
+    }
+    const part0 = raw.slice(0, c1);
+    const part1 = raw.slice(c1 + 1, c2);
+    const part3 = raw.slice(c3 + 1);
+    preview.value = part0 + '/' + part1 + '/' + part3;
+  }
+  document.addEventListener('DOMContentLoaded', updateStampPreview);
+</script>
+</body>
+</html>

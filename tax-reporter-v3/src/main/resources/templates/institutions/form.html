@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title th:text="${isEdit} ? 'Edit Institution — Tax Reporter' : 'New Institution — Tax Reporter'">New Institution</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<th:block th:replace="~{fragments/crud-styles :: crud}"></th:block>
+</head>
+<body>
+<div class="shell">
+  <aside th:replace="~{fragments/nav :: sidebar(active='institutions')}"></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1 th:text="${isEdit} ? 'Edit Institution' : 'New Institution'">New Institution</h1>
+        <span class="sub" th:unless="${isEdit}">Create an institution record</span>
+        <span class="sub" th:if="${isEdit}">Editing institution</span>
+      </div>
+      <a class="btn btn-ghost" th:href="@{/institutions}">← Back to institutions</a>
+    </header>
+
+    <div class="crud-flash" th:if="${flashMessage}" th:text="${flashMessage}">Saved.</div>
+
+    <div class="crud-form-card">
+      <form th:action="${isEdit} ? @{/institutions/{id}/edit(id=${form.id})} : @{/institutions}" th:object="${form}" method="post">
+        <div class="alert-error-banner" th:if="${#fields.hasErrors('*')}">
+          Please correct the highlighted fields below before saving.
+        </div>
+        <input type="hidden" th:if="${isEdit}" th:field="*{id}">
+
+        <div class="crud-form-grid">
+          <div class="crud-field">
+            <label for="name">Name *</label>
+            <input type="text" id="name" th:field="*{name}"
+                   th:classappend="${#fields.hasErrors('name')} ? 'field-error'">
+            <span class="error-text" th:if="${#fields.hasErrors('name')}" th:errors="*{name}">Required</span>
+          </div>
+          <div class="crud-field">
+            <label for="tinNumber">TIN number *</label>
+            <input type="text" id="tinNumber" class="mono" th:field="*{tinNumber}"
+                   th:classappend="${#fields.hasErrors('tinNumber')} ? 'field-error'">
+            <span class="error-text" th:if="${#fields.hasErrors('tinNumber')}" th:errors="*{tinNumber}">Required</span>
+          </div>
+        </div>
+
+        <div class="crud-checkbox-field" style="margin-top:18px;">
+          <input type="checkbox" id="enabled" th:field="*{enabled}">
+          <label for="enabled">Enabled</label>
+        </div>
+
+        <div class="crud-form-actions">
+          <a class="btn btn-ghost" th:href="@{/institutions}">Cancel</a>
+          <button type="submit" class="btn btn-primary" th:text="${isEdit} ? 'Save changes' : 'Create institution'">Create institution</button>
+        </div>
+      </form>
+    </div>
+  </main>
+</div>
+
+<script>
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.menu-toggle')) {
+      document.getElementById('sidebar').classList.toggle('open');
+    }
+  });
+</script>
+</body>
+</html>

@@ -22,8 +22,15 @@
   }
   .job-status.idle{background:var(--green-bg);color:var(--green);}
   .job-status.running{background:var(--amber-bg);color:#8A6415;}
+  .job-status.disabled{background:var(--red-bg);color:#8A3222;}
   .job-status .dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
   .job-actions{flex:0 0 auto;}
+  .job-date-fields{display:flex;gap:8px;margin-bottom:10px;}
+  .job-date-fields label{display:block;font-size:11px;color:var(--ink-soft);margin-bottom:3px;}
+  .job-date-fields input[type="date"]{
+    font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:6px 8px;
+    border:1px solid var(--line-strong);border-radius:var(--radius);background:#fff;
+  }
 </style>
 </head>
 <body>
@@ -61,6 +68,117 @@
       </div>
     </div>
 
+    <div class="job-card">
+      <div>
+        <h2 class="job-name">Card Transaction / Invoice Matching</h2>
+        <div class="job-desc">
+          Per stamp machine (SDC), matches unprocessed card transactions against that SDC's
+          unprocessed card-paid invoices by date and amount (with several rounding tolerances).
+          A matched transaction gets the invoice's stamp data and is marked successful; either
+          way it's marked processed so it isn't retried automatically.
+        </div>
+        <span class="job-status idle" th:if="${invoiceMatchingEnabled and !invoiceMatchingRunning}"><span class="dot"></span> Idle</span>
+        <span class="job-status running" th:if="${invoiceMatchingRunning}"><span class="dot"></span> Running</span>
+        <span class="job-status disabled" th:if="${!invoiceMatchingEnabled}"><span class="dot"></span> Disabled in configuration</span>
+      </div>
+      <div class="job-actions">
+        <form class="confirm-submit" th:action="@{/jobs/invoice-matching/run}" method="post"
+              data-confirm="Run card transaction / invoice matching now? This can take a moment across many stamp machines.">
+          <button type="submit" class="btn btn-primary" th:disabled="${invoiceMatchingRunning or !invoiceMatchingEnabled}">
+            <span th:text="${invoiceMatchingRunning} ? 'Running…' : 'Run Now'">Run Now</span>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div class="job-card">
+      <div>
+        <h2 class="job-name">Card Transaction Pull (Oracle)</h2>
+        <div class="job-desc">
+          Pulls card transactions from the Oracle (MAGICASH) source system into this app's
+          ledger for the date range chosen below, creating any customer or terminal machine
+          records it doesn't recognize yet. This is the maintenance-mode pass — the regular,
+          automatic today's-date pull still runs on its own on <code>cards.pull.cron.expression</code>
+          and isn't triggered from here.
+        </div>
+        <span class="job-status idle" th:if="${!cardPullRunning}"><span class="dot"></span> Idle</span>
+        <span class="job-status running" th:if="${cardPullRunning}"><span class="dot"></span> Running</span>
+      </div>
+      <div class="job-actions">
+        <form class="confirm-submit" th:action="@{/jobs/card-pull/run}" method="post"
+              data-confirm="Pull card transactions from Oracle for this date range now?">
+          <div class="job-date-fields">
+            <div>
+              <label for="cardPullStartDate">From</label>
+              <input type="date" id="cardPullStartDate" name="startDate" required>
+            </div>
+            <div>
+              <label for="cardPullEndDate">To</label>
+              <input type="date" id="cardPullEndDate" name="endDate" required>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary" th:disabled="${cardPullRunning}">
+            <span th:text="${cardPullRunning} ? 'Running…' : 'Run Now'">Run Now</span>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div class="job-card">
+      <div>
+        <h2 class="job-name">Deposit Pull (Oracle)</h2>
+        <div class="job-desc">
+          Pulls customer deposits from the same Oracle source into this app's CustomerDeposit
+          table for the date range chosen below, same recognize-or-create pattern for
+          customers. This is the maintenance-mode pass — the regular, automatic today's-date
+          pull still runs on its own on <code>deposit.pull.cron.expression</code> and isn't
+          triggered from here.
+        </div>
+        <span class="job-status idle" th:if="${!depositPullRunning}"><span class="dot"></span> Idle</span>
+        <span class="job-status running" th:if="${depositPullRunning}"><span class="dot"></span> Running</span>
+      </div>
+      <div class="job-actions">
+        <form class="confirm-submit" th:action="@{/jobs/deposit-pull/run}" method="post"
+              data-confirm="Pull customer deposits from Oracle for this date range now?">
+          <div class="job-date-fields">
+            <div>
+              <label for="depositPullStartDate">From</label>
+              <input type="date" id="depositPullStartDate" name="startDate" required>
+            </div>
+            <div>
+              <label for="depositPullEndDate">To</label>
+              <input type="date" id="depositPullEndDate" name="endDate" required>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary" th:disabled="${depositPullRunning}">
+            <span th:text="${depositPullRunning} ? 'Running…' : 'Run Now'">Run Now</span>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div class="job-card">
+      <div>
+        <h2 class="job-name">Stamp Lookup (SQL Server)</h2>
+        <div class="job-desc">
+          Resolves <code>stampData</code> for every CustomerDeposit that doesn't have it yet, by
+          looking each one up against the external SQL Server Stamp table via its
+          <code>sapReference</code>. A deposit with no match yet in that table is retried on
+          every run, not skipped after one miss. Runs on <code>stamp.pull.cron.expression</code>.
+        </div>
+        <span class="job-status idle" th:if="${!stampLookupRunning}"><span class="dot"></span> Idle</span>
+        <span class="job-status running" th:if="${stampLookupRunning}"><span class="dot"></span> Running</span>
+      </div>
+      <div class="job-actions">
+        <form class="confirm-submit" th:action="@{/jobs/stamp-lookup/run}" method="post"
+              data-confirm="Look up stamp data for every unresolved deposit now?">
+          <button type="submit" class="btn btn-primary" th:disabled="${stampLookupRunning}">
+            <span th:text="${stampLookupRunning} ? 'Running…' : 'Run Now'">Run Now</span>
+          </button>
+        </form>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -72,6 +190,20 @@
       }
     }
   });
+
+  // Keeps the native date picker itself from offering an invalid range — the actual
+  // validation that matters is server-side (JobController.validateRange and each job's own
+  // runMaintenanceNow), this is just a head start so the person sees the constraint before
+  // submitting rather than only after.
+  function syncDateRange(startId, endId) {
+    const startEl = document.getElementById(startId);
+    const endEl = document.getElementById(endId);
+    if (!startEl || !endEl) return;
+    startEl.addEventListener('change', () => { endEl.min = startEl.value; });
+    endEl.addEventListener('change', () => { startEl.max = endEl.value; });
+  }
+  syncDateRange('cardPullStartDate', 'cardPullEndDate');
+  syncDateRange('depositPullStartDate', 'depositPullEndDate');
 </script>
 </body>
 </html>

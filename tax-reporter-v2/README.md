@@ -3,6 +3,490 @@
 Spring Boot + PostgreSQL + JPA + Thymeleaf app for browsing `card_transaction` records,
 with a sidebar-navigated ledger UI and username/password login.
 
+## Add/edit/update restricted to ADMIN; CUSTOMER_SCOPED gains Invoices/Customer Deposits — asymmetrically
+
+**Write actions restricted to ADMIN**, via a `SecurityConfig` restructuring — specific
+write-action URL rules now come before the broader per-entity rules (`/transactions/*/edit`,
+`/transactions/*/process`, `/invoices/*/edit`, `/invoices/*/process`,
+`/customer-deposits/*/edit`, `/customer-deposits/*/fetch-stamp-data`, `/customer-deposits/match`
+→ ADMIN only). Deliberately excludes reconciliation and the customer-scoped bulk
+"reconcile all matching" path — that's recent, dedicated work opening it to
+`ROLE_CUSTOMER_SCOPED`, and reconciling isn't a per-record edit the way these are.
+
+Backed by template changes on all six affected pages (`transaction-view.html`,
+`transactions.html`, `invoice-view.html`, `invoices.html`, `customer-deposit-view.html`,
+`customer-deposits.html`) — `sec:authorize="hasRole('ADMIN')"` on every Edit link,
+Mark-as-Processed button, Fetch-Stamp-Data button, and Run-Matching button, so ANALYST/
+CUSTOMER_SCOPED don't see dead buttons that would 403 on click. Several of these files were
+missing the `xmlns:sec` namespace declaration entirely and needed it added first.
+
+**CUSTOMER_SCOPED gains Invoices and Customer Deposits — but only one of them is actually
+scoped.** `CustomerDeposit` has a real `customer` FK, so it got the full treatment: a new
+`restrictToCustomerIds` field on `CustomerDepositFilter`, the same security-level predicate in
+`CustomerDepositSpecifications` that `CardTransactionSpecifications` already uses, and
+`CustomerDepositController` now scopes `list()` and guards `view()` against direct-URL access —
+mirroring `CardTransactionController`'s established pattern exactly.
+
+`TaxReporterInvoice` has no customer relation at all — only loose `clientTin`/`clientName`
+string fields, no FK. Rather than invent a fragile string-matching linkage, invoice access was
+granted without scoping: a CUSTOMER_SCOPED user with this menu sees *every* invoice, identical
+to Admin/Analyst. Flagged explicitly in the `SecurityConfig` comment — this is worth confirming
+is the intended outcome for a role whose entire purpose is restriction, since it's a real,
+asymmetric gap between the two menus this request granted together.
+
+## Plate-number matching now sanitizes the raw value first
+
+`CardTransaction.plateNumber` can hold more than one plate separated by `|` — `processTransactionWithPlateNumber`
+now matches against just the first one (`getPlateNumberFromTransaction`) instead of the raw
+field value. Restructured to early-return style (same as the rest of this class) rather than the
+pasted version's mutable `plateNumber = null` pattern — verified behaviorally identical across
+every case (null, blank, no separator, with separator, empty after trim) before making the swap.
+Also dropped a stray empty statement (a bare `;` on its own line) that had no effect either way.
+
+## `markProcessed` restructured to match `matchAndProcessTransactions` exactly
+
+Was functionally equivalent already (duplicated if/else branches with two separate variables,
+`stampData2`/`stampData`); now structurally identical too — one reassigned `stampData` variable,
+matching `matchAndProcessTransactions`'s own per-transaction logic line for line.
+
+**Caught and fixed while editing**: the javadoc directly above this method was stale from the
+*original* implementation and had gone unnoticed through the last edit — it still said "this
+manual path only ever represents a successful outcome," which stopped being true the moment
+`markProcessed` started actually depending on whether a match was found. Removed rather than
+left sitting there contradicting the method underneath it.
+
+## `markProcessed` now actually attempts invoice matching, not just forcing `success=true`
+
+Real behavior change, not a rename: the manual "Mark as Processed" action (transaction detail
+page) used to unconditionally set `success=true` regardless of whether anything was actually
+verified. It now runs the same plate-number-first, tolerant-fallback matching
+`matchAndProcessTransactions` uses for a whole SDC, for this one transaction — `success=true`
+only if a match is actually found; `processed=true` either way, since this remains fundamentally
+a "stop retrying this one automatically" action even when no invoice turns up. Same
+`cardTransactionRepositoryV2` → `repository` field-name fix as everywhere else. No per-call
+try/catch added — `matchAndProcessTransactions`'s own loop doesn't wrap individual transactions
+either, so this stays consistent with that rather than adding handling that wasn't asked for.
+
+## `matchAndProcessTransactions`: plate-number matching tried first, falls back to the tolerant matcher
+
+New `processTransactionWithPlateNumber` (same SDC, same plate number, exact floor-rounded paid
+amount, card payment, invoice stamped during the transaction's own calendar day) tried before
+the existing `processTransaction` (looser date/amount-tolerance matching, no plate number).
+
+**Two real bugs fixed, not just ported:**
+1. The new repository method as given used `...StampDateGreaterThanEqualAndDateTrnLessThan...`
+   — `TaxReporterInvoice` has no `dateTrn` property (it has `stampDate`, which is what the
+   caller's `start`/`end` actually bound against). This would have failed at *application
+   startup* with `PropertyReferenceException`, not just at call time — Spring Data can't derive
+   a query against a property that doesn't exist. Fixed to `StampDateLessThan`, referencing the
+   same field as the lower bound.
+2. The pasted version ran `processTransaction` *unconditionally* after
+   `processTransactionWithPlateNumber`, even when the plate-number match had already succeeded.
+   That could silently overwrite a precise match with a less precise one found under the
+   tolerant matcher, while leaving the *first* matched invoice orphaned — still marked
+   `processed=true` as if matched to this transaction, but no longer the invoice the
+   transaction's own `stampData` actually points to. Changed to only fall back to
+   `processTransaction` when the plate-number attempt returns `null`.
+
+Also fixed the same `cardTransactionRepositoryV2` → `repository` field-name mismatch as every
+other uploaded job/service in this project.
+
+## `CardTransactionExportService`: Allocated Quantity added next to Allocated Amount
+
+Computed as `allocatedAmount / CardTransaction.unitPrice`, in both Excel and PDF. Guarded
+against the two ways that division goes wrong: `computeAllocatedQuantity` returns `null` (shown
+as blank/`—`) rather than throwing when `allocatedAmount` is `null` (a row with no allocation)
+or `unitPrice` is `null` or zero — `BigDecimal.divide` throws `ArithmeticException` on a
+divide-by-zero, which would otherwise take down the whole export over one bad row rather than
+just leaving that row's quantity blank.
+
+## `server.servlet.context-path` moved from base to `dev` only
+
+Removed from the shared `application.properties`, added to `application-dev.properties` only.
+**Real behavior change, not just relocation**: neither `oracle` nor `sp` sets this
+independently, so with the base no longer covering it, both now run at the root `/` instead of
+`/tax-reporter`. Your real uploaded `oracle` file did have this setting — this wasn't restored
+there since only `dev` was asked for, but it's worth confirming that's the intended outcome for
+`oracle` specifically.
+
+## `CardTransaction.ebmNumber` needed `@ToString.Exclude` too — confirmed via a real production crash
+
+A reported `LazyInitializationException` on `depositAllocations` during `toString()` turned out
+to have a subtler cause than "the collection isn't excluded" — it already was, correctly, and
+that wasn't enough.
+
+**Actual root cause**: Lombok's generated `toString()`, for each included field, looks for a
+matching `get<Field>()` method and calls it instead of touching the field directly *if one
+exists* — it doesn't check whether that method is Lombok-generated or hand-written.
+`ebmNumber` is `@Getter(AccessLevel.NONE)`, which only stops Lombok from *auto-generating* a
+getter for it — it does nothing to stop `toString()` from finding and calling the class's own
+hand-written `getEbmNumber()` method, which iterates `depositAllocations` directly. So the real
+call chain on a detached entity was `toString()` → `getEbmNumber()` → collection iteration —
+`@ToString.Exclude` on `depositAllocations` only stops that collection from being printed as
+*its own* field; it does nothing to stop an unrelated field's getter from reaching into it.
+
+**Fixed** by adding `@ToString.Exclude` to `ebmNumber` itself, not the collection (which was
+already correctly excluded). Swept the rest of the project for the same pattern —
+`CustomerDeposit`/`TaxReporterInvoice`'s own `getStampNumber()` methods only touch `stampData`
+(a plain column, never lazy), so neither needed the same fix; this was isolated to `ebmNumber`.
+
+## Date-range validation on the two Oracle maintenance pulls
+
+Three layers, not just one, for the `startDate`/`endDate` the Jobs page now collects:
+
+1. **Client-side**: each date pair's native picker keeps its own `min`/`max` in sync as the
+   other field changes, so the browser itself resists picking an inverted range. Not the real
+   guarantee — just a head start.
+2. **Controller**: `JobController.validateRange` rejects `startDate` after `endDate` before
+   either job's `AtomicBoolean` guard or Oracle connection is ever touched, with a clear flash
+   message instead of a stack trace.
+3. **Job itself**: `runMaintenanceNow` in both `OracleJdbcCardTransactionJob` and
+   `OracleJdbcCustomerDepositJob` validates independently (parses both dates, throws
+   `IllegalArgumentException` if either fails to parse or if the range is inverted) — checked
+   *before* acquiring the reentrancy guard, so a rejected call never marks the job as running or
+   blocks a legitimate one behind it. This exists because `runMaintenanceNow` is a public method;
+   the UI form isn't the only conceivable caller, and the job shouldn't depend on every future
+   caller remembering to validate first.
+
+The controller wraps each job call in a catch for that same exception as a safety net — not the
+primary path (the controller's own check already catches this first in normal use), just insurance
+against the two checks ever drifting apart.
+
+## Oracle pull jobs: manual trigger now runs maintenance mode with picked dates
+
+Both `OracleJdbcCardTransactionJob` and `OracleJdbcCustomerDepositJob`'s "Run Now" buttons now
+run the maintenance-mode backfill for a date range chosen on the Jobs page, instead of the
+regular today's-date pull. The regular pull (`readCardTransaction`/`readCustomerDeposit`) is
+unchanged and still runs on its own cron schedule — it just no longer has a manual trigger of
+its own, since replacing the entry point was the request, not adding a second one.
+
+**`OracleJdbcCustomerDepositJob` methods renamed**, behavior unchanged: `readCardTransaction` →
+`readCustomerDeposit`, `readCardTransactionInMaintenanceMode` →
+`readCustomerDepositInMaintenanceMode` — both had names copy-pasted from the sibling
+`OracleJdbcCardTransactionJob` ("CardTransaction" in a class that's actually about
+`CustomerDeposit`). `OracleJdbcCardTransactionJob` keeps its existing names — no rename needed,
+that class's naming was already correct.
+
+**A real behavior decision made and flagged, not silently applied:** `maintenace.mode.enabled`
+still gates the *scheduled* maintenance trigger, but not the *manual* one anymore. A person who
+explicitly picks dates and clicks "Run Now" has already made a deliberate choice — blocking that
+behind a config flag meant for "should this run automatically" would just be confusing (enter
+real dates, click the button, get told nothing happened because of an unrelated setting).
+
+**Date handling**: the Jobs page uses `<input type="date">` (ISO `yyyy-MM-dd`, native picker),
+and `JobController` reformats to `dd/MM/yyyy` before calling either job — matching exactly what
+`OracleCardTransactionRepository`/`OracleCustomerDepositRepository`'s SQL expects
+(`TO_DATE(?, 'DD/MM/YYYY')`). The jobs themselves don't know or care whether their date strings
+came from a config property or a UI form field — same contract either way.
+
+## `StampJdbcConfig`/`StampLookupService`/`StampLookupException` moved to the real package, plus a new job
+
+`nika.tax.reporter.stamp.{config}` and `nika.tax.reporter.service.{StampLookupService,StampLookupException}`
+→ `nika.tax.reporter.sqlserver.{config,service,exception}`, matching the real app's structure.
+Not just a move: `StampLookupService`'s `STAMP_QUERY` was previously a flagged, assumed
+placeholder (`dbo.Stamp`/`stamp_data`/`sap_reference`) since the real schema wasn't known — now
+uses the real query (`dbo.Invoice_Table`/`RRAString`/`invoiceNumber`). Both consumers
+(`CustomerDepositController`, `CustomerDepositService`) updated to the new import paths —
+`CustomerDepositService` previously relied on same-package access to these two classes with no
+explicit import at all, so moving them required adding imports there for the first time.
+
+**A real bug fixed, not just relocated:** `findStampDataBySapReference` had two back-to-back
+checks for the same condition — the second (`if (!sapReference.matches("\\d+")) return
+Optional.of("Invalid sapReference format: ...")`) is unreachable, since the first check already
+returns for every case where the digits-only match fails. Even if it had been reachable, the
+behavior would still have been wrong: the method's contract is "matching stamp data or empty,"
+and returning an error-message string via `Optional.of(...)` means the caller
+(`SqlServerJdbcCustomerDepositJob`) would have saved that literal string onto
+`CustomerDeposit.stampData` as if it were real data. Collapsed to the one correct check.
+
+**`SqlServerJdbcCustomerDepositJob` added and wired into the Jobs page** — third entry alongside
+the Oracle pulls, same idle/running/"Run Now" pattern. Fixed the same repository-type mismatch
+as every other uploaded job here (`nika.tax.reporter.postgres.repository.v2.CustomerDepositRepositoryV2`
+→ this project's actual `nika.tax.reporter.repository.CustomerDepositRepository`), added the
+`findNullOrEmpty()` query method it depends on (every deposit with no `stampData` yet — doesn't
+distinguish "never looked up" from "looked up, found nothing," so a still-unmatched deposit gets
+retried every run rather than skipped after one miss), and the same `AtomicBoolean` reentrancy
+guard as every other job here now that this is reachable from both a cron trigger and a manual
+button.
+
+## `OracleJdbcCardTransactionJob` / `OracleJdbcCustomerDepositJob` — the pull jobs, wired to the UI
+
+These are the actual jobs behind `cards.pull.cron.expression`/`deposit.pull.cron.expression`,
+which have been sitting in the config since the properties migration with nothing to run them.
+Both added to the Jobs page — same idle/running status pills and "Run Now" button pattern as
+`CustomerDepositMatchingService`/`PostgresJob`.
+
+**Fixes needed to compile, checked against this project's actual code rather than assumed:**
+- Both files imported `nika.tax.reporter.postgres.domain.v2.Customer` — same `.v2` mismatch
+  documented twice before in this project's history now. Fixed to
+  `nika.tax.reporter.postgres.domain.Customer`.
+- Both referenced `nika.tax.reporter.postgres.repository.{TerminalMachineRepository, v2.CardTransactionRepositoryV2, v2.CustomerRepositoryV2, v2.CustomerDepositRepositoryV2}`
+  — none of which exist in this project. Corrected to this project's actual
+  `nika.tax.reporter.repository.{TerminalMachineRepository, CardTransactionRepository, CustomerRepository, CustomerDepositRepository}`
+  — no `"V2"` suffix, no `"postgres."` prefix; every repository in this project lives directly
+  under `nika.tax.reporter.repository`. `customerDepositRepositoryV2` renamed to
+  `customerDepositRepository` (field + constructor param) for consistency now that the type
+  itself doesn't say "V2" either.
+- Both take a constructor-injected `ZoneId` that no bean provided anywhere in this project.
+  Added `TimeZoneConfig`, reading `app.timezone` — falls back to UTC, since that property only
+  exists in the per-profile files, not the shared base, so a plain build with no Maven profile
+  active (this project's `default` fallback) would otherwise have nothing to read and fail
+  at startup.
+- Four repository methods didn't exist yet and were added, each checked against the target
+  entity's actual constraints before deciding how to write it:
+  `TerminalMachineRepository.getByPosNumber`, `CustomerRepository.getByClientId` (no unique
+  constraint on `clientId` — flagged, not assumed safe),
+  `CardTransactionRepository.getByTransactionGuid` (same flag — no unique constraint on this
+  entity's `transactionGuid`, unlike `CustomerDeposit`'s),
+  `CustomerDepositRepository.getByTransactionGuid` (safely unique here).
+
+**Added, not in the uploaded version:** an `AtomicBoolean` reentrancy guard in each job, one
+shared per class covering both its regular-pull and maintenance-mode `@Scheduled` methods —
+same reasoning as every other job in this project reachable from both a cron trigger and a
+manual button: without it, two overlapping runs could race on the same check-then-insert
+pattern, even though the `getByTransactionGuid` check would still stop an actual duplicate row.
+
+**Preserved as given, not cleaned up:** `handleCardTransaction()` in the card-transaction job is
+dead code — nothing calls it, only `handleCardTransactionWithMachineId()` is used by either
+`@Scheduled` method. Left in rather than removed; not this project's place to delete logic from
+uploaded business code that might be a deliberate work-in-progress.
+
+**"Run Now" triggers the regular pull only**, not the maintenance-mode backfill (which reads a
+fixed historical date range and is separately gated by `maintenace.mode.enabled`) — the more
+intuitive "run the normal thing now" action, made explicit in both the code comment and the
+Jobs page's own description text.
+
+## Oracle ingestion source added — `OracleCardTransactionRepository`/`OracleCustomerDepositRepository`
+
+The raw MAGICASH-side queries and DTOs behind the `cards.pull`/`deposit.pull` jobs those cron
+properties have been referencing since the properties-file migration. Added in
+`nika.tax.reporter.oracle.{repository,dto}`, matching the real package convention.
+
+**One fix, everything else compiled clean against this project's actual entities as uploaded:**
+both DTOs imported `nika.tax.reporter.postgres.domain.v2.Customer` — the same `.v2` mismatch
+already documented once before in this project's history for a different file. Fixed to
+`nika.tax.reporter.postgres.domain.Customer` (no `.v2`) in both. Every other `.builder()` call
+(`CardTransaction`, `CustomerDeposit`, `TerminalMachine`, `Customer`) checked field-by-field
+against this project's real entities before adding anything — all matched exactly, no other
+changes needed.
+
+**Not wired to anything yet, same as `OracleJdbcConfig` before it.** These repositories query
+Oracle and return DTOs; nothing in this project calls them. The actual "pull" job — presumably
+what `cards.pull.cron.expression`/`deposit.pull.cron.expression` are waiting for — isn't built
+here, only its data-access layer.
+
+## Real `pom.xml` and `logback-spring.xml` — `pom.xml` fully rebuilt, not patched
+
+**Supersedes the earlier Maven-profiles README entry** — that entry's example jar name
+(`target/tax-reporter-0.1.0.jar`) is now wrong: `groupId`/`artifactId`/`version` changed to
+match your real values (`nika.tax.reporter` / `nika.tax.reporter` / `0.0.1`), and the
+`finalName` pattern changed from per-profile overrides to your real single top-level
+`${project.artifactId}-${project.version}-${spring.profiles.active}` expression.
+
+**A real gap closed, not just a reformat:** your `pom.xml` configures
+`maven-resources-plugin` with `useDefaultDelimiters=false` and a `@`-only delimiter. Without
+that, Maven's *default* filtering behavior recognizes both `@..@` and `${..}` as delimiters —
+meaning every `${STAMP_DB_PASSWORD:changeme}`-style Spring placeholder in these properties
+files (there are many) becomes a candidate for Maven to also try matching against a
+same-named Maven/system property at *build* time. Usually nothing matches and it's left alone,
+but that's relying on coincidence — a Maven or system property sharing a name with one of these
+placeholders would get silently substituted at build time instead of staying for Spring to
+resolve at runtime. I'd flagged this exact risk in an earlier pass without actually closing it;
+now it's the same fix your real `pom.xml` already has.
+
+**Dependencies added to match your real build**: `spring-boot-starter-batch`,
+`spring-boot-starter-quartz`, `spring-boot-starter-webflux` + `jetty-reactive-httpclient`, the
+real Oracle driver (`ojdbc11` + `orai18n` — `OracleJdbcConfig` referenced
+`oracle.jdbc.OracleDriver` before but had no actual driver dependency to back it),
+`commons-csv`, MapStruct (`mapstruct` + `mapstruct-processor`), and
+`spring-boot-configuration-processor`.
+
+**Not acted on, just flagged:** Quartz and WebFlux are real dependencies in your build, but
+nothing in this reference project uses either — `PostgresJob`/`CustomerDepositMatchingService`
+still use plain `@Scheduled`, matching what was actually shown to me. MapStruct is present too,
+while every mapper in this project (`CustomerMapper`, `TaxReporterInvoiceMapper`, etc.) is still
+hand-written. None of these were rewritten to use the "real" mechanism — that's a bigger,
+riskier change than adding a dependency, and wasn't asked for.
+
+**`logback-spring.xml` added** (exact copy — console + size/time-based rolling file appender,
+50MB per file, 100MB archive cap, 30-day history) and `logging.config=classpath:logback-spring.xml`
+restored in `application.properties`, along with the WebClient/Reactor Netty log-level lines —
+both had been deliberately omitted earlier specifically because referencing a nonexistent
+logback config file breaks startup, and WebFlux wasn't confirmed as a real dependency yet.
+Both are now confirmed real.
+
+**New Maven profile discovered and added**: `niwe` ("Test Profile" per your own `pom.xml`
+comment). `application-niwe.properties` added as an empty placeholder, same reasoning as
+`sp`/`oracle` before their real values existed — I don't have real `niwe`-specific settings, so
+it's left honestly blank rather than guessed at.
+
+## Config switched from YAML to real `.properties` files — a real migration, not a reformat
+
+Replaced `application.yml`/`application-{dev,sp,oracle}.yml` with `.properties` files matching
+your real uploaded structure and property names exactly (credentials/internal IPs sanitized to
+`${ENV_VAR:default}` placeholders — see below for why). This wasn't a mechanical format
+conversion; reading your real files surfaced several things that needed fixing, not just moving.
+
+**Two real bugs found in the uploaded files:**
+1. **`application-dev.properties`**: a trailing backslash on the Oracle password line — a
+   `.properties` line-continuation character that merged the *next* line
+   (`driver-class-name=...`) into the password value, garbling the password and silently
+   dropping `driver-class-name` as its own property. The `oracle`/`sp` versions of this same
+   line don't have it — fixed here, worth checking your real `dev` file for the same thing.
+2. **`spring.datasource.postgres.hikari.*` / `spring.datasource.oracle.hikari.*` use a nested
+   `hikari.` sub-key** — structurally different from `spring.datasource.stamp.*`, which is flat.
+   Binding that nested structure directly onto a raw `HikariDataSource` the same simple way
+   `StampJdbcConfig` correctly handles stamp's flat properties would silently fail: Hikari has no
+   property literally called `hikari`, so the pool-tuning values would never apply, and both
+   datasources would quietly fall back to Hikari's own default pool size instead of your tuned
+   settings (max 20 for Postgres, etc.) — no error anywhere. Fixed with a two-step binding
+   (connection info, then pool tuning, layered onto the same object) in both
+   `PrimaryDataSourceConfig` (rebuilt) and the new `OracleJdbcConfig` (see below). **Worth
+   verifying in your real deployment** — if the real Java code uses the simpler single-prefix
+   pattern, this exact silent failure may already be happening there.
+
+**`OracleJdbcConfig` — first real implementation in this project.** It had only ever been
+referenced in comments before (`StampJdbcConfig` mentions it by name), never actually built,
+because nothing had shown its real property structure until now. It correctly binds the
+connection info and the nested pool-tuning block; it is **not** wired to any actual query
+logic — `cards.pull.cron.expression`/`deposit.pull.cron.expression` hint at an ingestion job
+that would use it, but that job isn't implemented here, only the datasource itself.
+
+**Two property-name mismatches fixed** between what I'd invented earlier and what your real app
+actually uses: `CustomerDepositMatchingService`'s cron property renamed from
+`deposit-matching.cron.expression` to `allocate.cron.expression`; `CardTransactionService`'s
+`backDays` renamed from `matching.mode.back-days` to `matching.back.days`.
+
+**Maven resource filtering, finally properly wired.** `spring.profiles.active=@spring.profiles.active@`
+in your base file confirmed the mechanism — added `<build><resources>` filtering (scoped to just
+`application*.properties`, not every resource) plus a top-level `spring.profiles.active=dev`
+Maven property that the `sp`/`oracle` profiles override. This replaces the earlier, half-working
+version where the Maven profile property existed but was never actually connected to anything.
+
+**Deliberately omitted:** `logging.config=classpath:logback-spring.xml` and the WebClient/Reactor
+Netty log-level lines from the base file — this project has no `logback-spring.xml`, and
+referencing one that doesn't exist would break startup, not just be a no-op. The rest of the
+verbose base-level logging (DEBUG SQL, TRACE bind parameters, DEBUG Spring Security) was kept
+exactly as given, but it's worth a second look given it applies to every profile, including `sp`.
+
+**Real credentials and internal IPs were not copied verbatim** — replaced with the same
+`${ENV_VAR:default}` pattern already used elsewhere in this project. This reference project gets
+zipped and shared repeatedly; embedding real production passwords in that artifact was a risk
+with no upside, and checked afterward that nothing leaked through, including into my own
+explanatory comments.
+
+## `spring.profiles.default` in a profile-specific file → startup crash
+
+A real deployment (`tax-reporter-v5-sp.jar`) hit `InvalidConfigDataPropertyException` at
+startup because `spring.profiles.default` had been added to `application-sp.yml`. Spring Boot
+hard-rejects `spring.profiles.default`/`spring.profiles.active` inside any profile-specific file
+— a profile-specific file only loads *after* a profile is already selected, so it can't also be
+what does the selecting.
+
+This wasn't a random mistake — my own earlier comment on `application-sp.yml` said "add whatever
+actually distinguishes this environment," and mirroring the base `application.yml`'s
+`spring.profiles.default: dev` there is exactly the kind of thing that instruction would lead
+someone to try. Added an explicit `DO NOT` warning to all three profile-specific files
+(`application-sp.yml`, `application-oracle.yml`, `application-dev.yml`) naming the exact
+property, why it fails, and that `spring.profiles.include` is the allowed alternative if a
+profile needs another one active alongside it.
+
+## Fixed: sidebar menu completely inaccessible on mobile
+
+Root cause was a CSS ordering bug in the shared `fragments/styles.html` (included by all 25
+page templates, so this one fix applies app-wide). Two `.menu-toggle{...}` rules existed with
+identical specificity — one inside `@media (max-width: 900px)` setting `display:inline-flex`,
+and a second, unscoped one appearing *after* it in the file setting `display:none`. With equal
+specificity, CSS ties resolve by source order, so the later `display:none` rule always won,
+on every screen size. The sidebar itself was correctly built to sit off-screen by default and
+slide in via a `.open` class toggle — but the hamburger button that's the only way to trigger
+that toggle was permanently hidden, so there was no way to open it at all on mobile, not just a
+styling issue.
+
+Fixed by reordering: the base `display:none` rule now comes first, with the
+`@media (max-width: 900px)` override after it, so the mobile rule correctly wins at that
+breakpoint. Checked the rest of the file for the same pattern (`.sidebar`, `.main`,
+`.nav-section`, `.glyph` also appeared more than once) — those were all already ordered
+correctly; only `.menu-toggle` had the bug.
+
+## `CardTransactionExportService`: one row per deposit allocation, plus Allocated Amount
+
+A transaction split across multiple deposits now produces one export row per allocation — each
+with that specific allocation's own EBM Number and the new **Allocated Amount** column — instead
+of collapsing to a single row that could only ever show one deposit's stamp number. A transaction
+with no allocations still gets exactly one row, with both fields blank. Applies to both Excel and
+PDF; `writeExcel`/`writePdf`'s public signatures are unchanged, so nothing calling into this
+service needed updating.
+
+**Known follow-up, not done here since it wasn't part of this request:**
+`ReconciliationExportService` has its own separate `buildEbmNumberMap` (this project duplicates
+small export helpers between the two services rather than sharing them) — it still does the old
+one-row-per-transaction, first-allocation-only behavior for its "Transactions" sheet. The two
+transaction-export code paths in this app now genuinely disagree with each other. Say if you want
+the same per-allocation treatment applied there too.
+
+**A minor, deliberately-accepted tradeoff worth knowing about:** the PDF export's `PDF_MAX_ROWS`
+cap (5,000) still limits how many *transactions* are fetched, not how many table rows get
+written — a transaction with multiple allocations can push the actual row count slightly past
+5,000. Not fixed here since it's a small effect in practice (allocation counts per transaction
+are typically low) and precisely capping row count would mean splitting a transaction's
+allocations across a page boundary, which seemed like more complexity than the edge case
+warranted — flagging it rather than quietly leaving it unexplained.
+
+## `PostgresJob` — CardTransaction ↔ TaxReporterInvoice matching, same pattern as deposit matching
+
+New second entry on the Jobs page, same shape as Customer Deposit Matching: a configurable cron
+(`matching.mode.cron.expression`, default every 10 minutes), a manual "Run Now" button, an
+`AtomicBoolean` guard so the two can never overlap.
+
+**The pasted original would not have compiled.** Its constructor took
+`stampMachineRepository`/`cardTransactionService`/`customerRepository`/`customerDepositService`
+as parameters but only ever assigned the first two — and the class body referenced
+`cardTransactionRepository`, `taxReporterInvoiceRepository`, `cardTransactionServiceV2`, and
+`backDays`, none of which were declared as fields anywhere. Rebuilt with proper constructor
+injection for what's actually used; the matching logic itself
+(`matchAndProcessTransactions`/`processTransaction`/`isWithinMagnitude`, now living on
+`CardTransactionService`, not the job class) is preserved exactly, redundant-looking tolerance
+checks included — they read like real accumulated tolerance rules from production, not
+something to simplify without knowing why each one exists.
+
+**`resetProcessedTransactions()` deliberately not ported.** The original called
+`cardTransactionServiceV2.resetProcessedTransactions()` unconditionally at the top of every
+scheduled run — *before* even checking `isMatchingMode`, meaning it ran even when matching was
+supposed to be disabled. This is the exact same bug already flagged once before in this
+project's history, on an earlier version of this same job. Its implementation also wasn't
+provided, so porting it would mean inventing behavior under an authoritative-sounding name. If
+transactions need to be retried after a failed match, that needs a real, intentional definition
+(reset everything? only ones with no remaining candidates? every run or on demand?) before it
+belongs here — not guessed at.
+
+**One naming bug fixed, behavior unchanged:** the original computed
+`invoiceDatePlusOne = invoice.getStampDate().minusDays(backDays)` — despite the name, this
+*subtracts* `backDays`, not adds it (a leftover from when this was hardcoded to
+`minusDays(1)`, i.e. "one day back"). Renamed to `invoiceDateMinusBackDays` for clarity; the
+actual date arithmetic is identical.
+
+## Delete and "Add New" removed across several entities
+
+**Delete removed** (endpoint + button, not hidden — fully removed) for `TerminalMachine`,
+`Institution`, `StampMachine`, `AppUser`, `Customer`. Left as a hidden-but-still-working endpoint
+would have been worse than actually removing it — someone could still `POST` to the URL directly.
+`AppUser` keeps its "enabled" toggle as the intended way to deactivate an account instead of
+deleting it, same as before.
+
+**"Add New" removed** (both the `/new` form route and the create `POST`, not just the button) for
+`CardTransaction`, `TaxReporterInvoice`, `CustomerDeposit`, `TerminalMachine`, `Customer`,
+`Institution`, `StampMachine`. **Editing existing records is untouched** — only creation is gone;
+`AppUser` keeps its own "Add New" since it wasn't in this list.
+
+**A deliberate scope boundary, not an oversight:** the underlying `xxxService.create(...)` and
+`xxxService.delete(...)` methods (7 and 5 respectively) are now unused anywhere in the app —
+confirmed by grep, not assumed — but were left in place rather than deleted from their service
+classes. Removing the *reachable* feature (routes, buttons) is a UI/API-level decision; removing
+the service-layer methods themselves is a further step that wasn't asked for and is easy to do
+later if wanted, whereas removing them now and finding they're needed again would mean
+reconstructing logic that already exists and already works.
+
 ## Reconciliation export (Excel/PDF), with its full set of card transactions
 
 `ReconciliationExportService` — new export, keyed by a single reconciliation id rather than a

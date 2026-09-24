@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -11,6 +12,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BeanPropertyBindingResult;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import jakarta.validation.Valid;
 
@@ -29,11 +33,12 @@ import nika.tax.reporter.dto.CustomerDepositForm;
 import nika.tax.reporter.postgres.domain.Customer;
 import nika.tax.reporter.postgres.domain.CustomerDeposit;
 import nika.tax.reporter.repository.CustomerRepository;
+import nika.tax.reporter.service.CustomerAccessScopeService;
 import nika.tax.reporter.service.CustomerDepositFilter;
 import nika.tax.reporter.service.CustomerDepositMapper;
 import nika.tax.reporter.service.CustomerDepositMatchingService;
 import nika.tax.reporter.service.CustomerDepositService;
-import nika.tax.reporter.service.StampLookupException;
+import nika.tax.reporter.sqlserver.exception.StampLookupException;
 
 @Controller
 @RequestMapping("/customer-deposits")
@@ -43,6 +48,7 @@ public class CustomerDepositController {
     private final CustomerDepositService customerDepositService;
     private final CustomerRepository customerRepository;
     private final CustomerDepositMatchingService customerDepositMatchingService;
+    private final CustomerAccessScopeService customerAccessScopeService;
 
     @GetMapping
     public String list(
@@ -54,12 +60,24 @@ public class CustomerDepositController {
             @RequestParam Optional<BigDecimal> maxAmount,
             @RequestParam(name = "customerId", required = false) List<UUID> customerIds,
             @PageableDefault(size = 50, sort = "dateTimeTransaction", direction = Sort.Direction.DESC) Pageable pageable,
+            Authentication authentication,
             Model model) {
 
         CustomerDepositFilter filter = buildFilter(q, status, dateFrom, dateTo, minAmount, maxAmount, customerIds);
 
-        Page<CustomerDeposit> deposits = customerDepositService.search(filter, pageable);
         List<Customer> customers = customerRepository.findAll(Sort.by("clientName"));
+
+        // Same pattern as CardTransactionController.list() — restrictToCustomerIds is the
+        // actual security boundary (enforced in the query itself via
+        // CustomerDepositSpecifications), the customer-picker filtering below is just UX so a
+        // scoped user isn't shown customers they can't actually select.
+        if (customerAccessScopeService.isScoped(authentication)) {
+            Set<UUID> allowed = customerAccessScopeService.accessibleCustomerIds(authentication);
+            filter.setRestrictToCustomerIds(allowed);
+            customers = customers.stream().filter(c -> allowed.contains(c.getId())).collect(Collectors.toList());
+        }
+
+        Page<CustomerDeposit> deposits = customerDepositService.search(filter, pageable);
 
         boolean hasActiveFilters = filter.getQ() != null && !filter.getQ().isBlank()
                 || filter.getStatus() != null && !filter.getStatus().isBlank()
@@ -108,30 +126,10 @@ public class CustomerDepositController {
         return "redirect:/customer-deposits";
     }
 
-    @GetMapping("/new")
-    public String newForm(Model model) {
-        addFormToModel(model, CustomerDepositForm.builder().build());
-        model.addAttribute("isEdit", false);
-        return "customer-deposit-form";
-    }
-
-    @PostMapping
-    public String create(@Valid @ModelAttribute("form") CustomerDepositForm form,
-                          BindingResult bindingResult,
-                          Model model,
-                          RedirectAttributes redirectAttributes) {
-        if (bindingResult.hasErrors()) {
-            model.addAttribute("isEdit", false);
-            return "customer-deposit-form";
-        }
-        CustomerDeposit saved = customerDepositService.create(form);
-        redirectAttributes.addFlashAttribute("flashMessage", "Customer deposit created.");
-        return "redirect:/customer-deposits/" + saved.getId();
-    }
-
     @GetMapping("/{id}")
-    public String view(@PathVariable UUID id, Model model) {
+    public String view(@PathVariable UUID id, Authentication authentication, Model model) {
         CustomerDeposit deposit = customerDepositService.getOrThrow(id);
+        assertAccessible(deposit, authentication);
         model.addAttribute("deposit", deposit);
         model.addAttribute("matchedAllocations", customerDepositService.matchedAllocations(id));
         model.addAttribute("allocatedAmount", customerDepositService.allocatedAmount(id));
@@ -184,6 +182,20 @@ public class CustomerDepositController {
     private void addFormToModel(Model model, CustomerDepositForm form) {
         model.addAttribute("form", form);
         model.addAttribute(BindingResult.MODEL_KEY_PREFIX + "form", new BeanPropertyBindingResult(form, "form"));
+    }
+
+    /** Same pattern as CardTransactionController.assertAccessible — the list page's own
+     * filtering only governs what's offered as clickable, not what this endpoint would load
+     * if a scoped user navigated here directly (guessed/bookmarked URL). */
+    private void assertAccessible(CustomerDeposit entity, Authentication authentication) {
+        if (!customerAccessScopeService.isScoped(authentication)) {
+            return;
+        }
+        Set<UUID> allowed = customerAccessScopeService.accessibleCustomerIds(authentication);
+        boolean ok = entity.getCustomer() != null && allowed.contains(entity.getCustomer().getId());
+        if (!ok) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No customer deposit found with id " + entity.getId());
+        }
     }
 
     private CustomerDepositFilter buildFilter(

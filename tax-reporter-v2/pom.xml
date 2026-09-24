@@ -11,20 +11,55 @@
     <relativePath/>
   </parent>
 
-  <groupId>nika.tax</groupId>
+  <groupId>nika.tax.reporter</groupId>
   <artifactId>tax-reporter-v2</artifactId>
-  <version>0.1.0</version>
+  <version>2.0.0</version>
+  <packaging>jar</packaging>
   <name>tax-reporter-v2</name>
   <description>Tax Reporter - card transaction ledger (Postgres + JPA + Thymeleaf + Spring Security)</description>
 
   <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <java.version>17</java.version>
+    <openpdf.version>1.3.30</openpdf.version>
+    <poi.version>5.2.5</poi.version>
+    <csv.version>1.12.0</csv.version>
+    <mapstruct.version>1.5.2.Final</mapstruct.version>
+    <everit.version>1.14.2</everit.version>
+    <!-- Default if no Maven profile is active (plain `mvn package`) — matches the real app's
+         convention of using Spring Boot's own implicit "default" profile name here, rather
+         than treating any one environment (e.g. dev) as the assumed fallback. With no
+         application-default.properties file (Spring doesn't expect one for the literal name
+         "default"), a plain build effectively runs on just the base application.properties,
+         no profile-specific overlay — building with one of the profiles below is required to
+         get dev/niwe/sp/oracle's actual settings. Resolved into application.properties'
+         `spring.profiles.active=@spring.profiles.active@` placeholder via resource filtering
+         (see <build><resources> and the maven-resources-plugin config below). -->
+    <spring.profiles.active>default</spring.profiles.active>
   </properties>
 
   <dependencies>
     <dependency>
       <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-web</artifactId>
+      <artifactId>spring-boot-devtools</artifactId>
+      <scope>runtime</scope>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-batch</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-quartz</artifactId>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -32,8 +67,82 @@
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-data-jpa</artifactId>
+      <artifactId>spring-boot-starter-web</artifactId>
     </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webflux</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-reactive-httpclient</artifactId>
+    </dependency>
+
+    <!-- Excel export -->
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi</artifactId>
+      <version>${poi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi-ooxml</artifactId>
+      <version>${poi.version}</version>
+    </dependency>
+
+    <!-- PDF export -->
+    <dependency>
+      <groupId>com.github.librepdf</groupId>
+      <artifactId>openpdf</artifactId>
+      <version>${openpdf.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.oracle.database.jdbc</groupId>
+      <artifactId>ojdbc11</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.oracle.database.nls</groupId>
+      <artifactId>orai18n</artifactId>
+    </dependency>
+
+    <!-- Secondary datasource: SQL Server, read-only lookup against the external Stamp table -->
+    <dependency>
+      <groupId>com.microsoft.sqlserver</groupId>
+      <artifactId>mssql-jdbc</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-csv</artifactId>
+      <version>${csv.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.mapstruct</groupId>
+      <artifactId>mapstruct</artifactId>
+      <version>${mapstruct.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.mapstruct</groupId>
+      <artifactId>mapstruct-processor</artifactId>
+      <version>${mapstruct.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <scope>provided</scope>
+      <optional>true</optional>
+    </dependency>
+
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-security</artifactId>
@@ -44,51 +153,7 @@
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-validation</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.postgresql</groupId>
-      <artifactId>postgresql</artifactId>
-      <scope>runtime</scope>
-    </dependency>
-
-    <!-- Secondary datasource: SQL Server, read-only lookup against the external Stamp table -->
-    <dependency>
-      <groupId>com.microsoft.sqlserver</groupId>
-      <artifactId>mssql-jdbc</artifactId>
-      <scope>runtime</scope>
-    </dependency>
-
-    <!-- Excel export -->
-    <dependency>
-      <groupId>org.apache.poi</groupId>
-      <artifactId>poi</artifactId>
-      <version>5.2.5</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.poi</groupId>
-      <artifactId>poi-ooxml</artifactId>
-      <version>5.2.5</version>
-    </dependency>
-
-    <!-- PDF export -->
-    <dependency>
-      <groupId>com.github.librepdf</groupId>
-      <artifactId>openpdf</artifactId>
-      <version>1.3.30</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.projectlombok</groupId>
-      <artifactId>lombok</artifactId>
-      <optional>true</optional>
-    </dependency>
-
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-devtools</artifactId>
-      <scope>runtime</scope>
+      <artifactId>spring-boot-configuration-processor</artifactId>
       <optional>true</optional>
     </dependency>
 
@@ -102,10 +167,67 @@
       <artifactId>spring-security-test</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>io.projectreactor</groupId>
+      <artifactId>reactor-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.batch</groupId>
+      <artifactId>spring-batch-test</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
+    <!-- ${spring.profiles.active} here resolves whatever the Maven build actually decided
+         (the top-level "default" above, or whichever profile below overrode it) directly into
+         the jar's own filename — no per-profile <build><finalName> overrides needed the way
+         an earlier version of this file had, since this one expression already covers every
+         case by referencing the property rather than hardcoding each profile's name. -->
+    <finalName>${project.artifactId}-${project.version}-${spring.profiles.active}</finalName>
+
+    <resources>
+      <!-- 1. Filter ONLY properties files -->
+      <resource>
+        <directory>src/main/resources</directory>
+        <includes>
+          <include>**/*.properties</include>
+        </includes>
+        <filtering>true</filtering>
+      </resource>
+      <!-- 2. Copy everything else without filtering -->
+      <resource>
+        <directory>src/main/resources</directory>
+        <excludes>
+          <exclude>**/*.properties</exclude>
+        </excludes>
+        <filtering>false</filtering>
+      </resource>
+    </resources>
+
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <configuration>
+          <!-- This is the part that actually makes filtering safe. Without it, Maven's
+               DEFAULT resource filtering recognizes BOTH @..@ AND ${..} as delimiters —
+               meaning every ${STAMP_DB_PASSWORD:changeme}-style Spring placeholder in these
+               properties files (there are many) would also be a candidate for Maven to try
+               matching against a same-named Maven/system property at build time. Usually
+               nothing matches and it's left alone, but that's relying on coincidence, not a
+               guarantee — a Maven or system property that happens to share a name with one of
+               these Spring placeholders would get silently substituted at BUILD time instead
+               of being left for Spring to resolve at RUNTIME. Restricting to @ only removes
+               that risk entirely: Maven filtering only ever touches @spring.profiles.active@-
+               style placeholders, never Spring's own ${...} syntax. -->
+          <useDefaultDelimiters>false</useDefaultDelimiters>
+          <delimiters>
+            <delimiter>@</delimiter>
+          </delimiters>
+        </configuration>
+      </plugin>
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
@@ -122,46 +244,42 @@
   </build>
 
   <!--
-    Build with `mvn clean package -Psp` or `-Poracle` (or `-Psp,oracle` for both together,
-    though see the note below on what that actually does with spring.profiles.active).
+    Build with `mvn clean package -Pdev` / `-Pniwe` / `-Psp` / `-Poracle`. Each profile sets
+    spring.profiles.active, which resource filtering bakes into application.properties'
+    @spring.profiles.active@ placeholder AND the jar's own filename (see <build><finalName>
+    above) — both wired from the same one property, not two separate mechanisms to keep in
+    sync. Plain `mvn package` with no -P flag uses the top-level default ("default") instead.
 
-    Each profile does two things:
-      1. Sets a `spring.profiles.active` property on the Maven build. This is a LABEL only —
-         Maven properties aren't automatically wired into the running app. For this to actually
-         activate a Spring profile at runtime, you still need either an application-sp.yml /
-         application-oracle.yml profile-specific config file AND to pass
-         -Dspring.profiles.active=sp (or the SPRING_PROFILES_ACTIVE env var) when actually
-         running the jar, or resource filtering enabled on application.yml to bake this Maven
-         property into it at build time (not set up here). Flagging this explicitly rather than
-         implying it's wired further than it actually is.
-      2. Overrides the build's finalName to include the profile id, so
-         `mvn package -Psp` produces target/tax-reporter-sp.jar instead of the default
-         target/tax-reporter-0.1.0.jar, and -Poracle produces tax-reporter-oracle.jar — this
-         part is fully wired and works as-is.
-
-    Scaffold only — I don't know what should actually differ between an "sp" build and an
-    "oracle" build beyond the jar name (different datasource config, different feature flags,
-    something else entirely), so the properties below are placeholders for you to extend, not a
-    complete environment-specific configuration.
+    niwe has no corresponding application-niwe.properties in this project — added as an empty
+    placeholder (same reasoning as the earlier sp/oracle placeholders before real values for
+    those existed): the profile needs to exist and build cleanly, but I don't have real
+    niwe-specific settings to put in it.
   -->
   <profiles>
+    <profile>
+      <id>dev</id>
+      <properties>
+        <spring.profiles.active>dev</spring.profiles.active>
+      </properties>
+    </profile>
+    <!-- Test profile -->
+    <profile>
+      <id>niwe</id>
+      <properties>
+        <spring.profiles.active>niwe</spring.profiles.active>
+      </properties>
+    </profile>
     <profile>
       <id>sp</id>
       <properties>
         <spring.profiles.active>sp</spring.profiles.active>
       </properties>
-      <build>
-        <finalName>${project.artifactId}-sp</finalName>
-      </build>
     </profile>
     <profile>
       <id>oracle</id>
       <properties>
         <spring.profiles.active>oracle</spring.profiles.active>
       </properties>
-      <build>
-        <finalName>${project.artifactId}-oracle</finalName>
-      </build>
     </profile>
   </profiles>
 

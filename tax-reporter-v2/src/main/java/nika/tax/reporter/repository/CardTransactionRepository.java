@@ -68,6 +68,10 @@ public interface CardTransactionRepository
     // than one deposit. `allocated` means "fully covered", not "has at least one allocation".
 
     /** Unallocated transactions for one customer, oldest first — the FIFO input queue for matching. */
+    /** Unprocessed transactions for one SDC (stamp machine), oldest first — the input queue
+     * for CardTransactionService.matchAndProcessTransactions. */
+    List<CardTransaction> getBySdcIdAndProcessedOrderByDateTimeTransactionAsc(String sdcId, Boolean processed);
+
     List<CardTransaction> findByCustomer_IdAndAllocatedOrderByDateTimeTransactionAsc(UUID customerId, Boolean allocated);
 
     /** Distinct customers with at least one unallocated, customer-linked transaction — drives
@@ -75,4 +79,11 @@ public interface CardTransactionRepository
      * algorithm for customers that actually have something left to allocate. */
     @Query("select distinct t.customer.id from CardTransaction t where t.allocated = false and t.customer is not null")
     List<UUID> findDistinctCustomerIdsWithUnallocatedTransactions();
+
+    /** Used by the Oracle ingestion jobs to check whether a transaction has already been
+     * pulled in, before inserting a duplicate. Unlike CustomerDeposit.transactionGuid, this
+     * entity's transactionGuid has no unique constraint — so this can throw
+     * IncorrectResultSizeDataAccessException if two rows ever share one. Flagged, not silently
+     * assumed safe. */
+    Optional<CardTransaction> getByTransactionGuid(String transactionGuid);
 }

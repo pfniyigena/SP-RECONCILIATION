@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title>Sign in — Tax Reporter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<th:block th:replace="~{fragments/styles :: base}"></th:block>
+<style>
+  body.login-body{
+    min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:var(--paper);position:relative;overflow:hidden;
+  }
+  body.login-body::before{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background-image:repeating-linear-gradient(to bottom, transparent 0 39px, var(--line) 39px 40px);
+    opacity:0.5;
+  }
+  .login-card{
+    position:relative;z-index:1;
+    width:100%;max-width:392px;background:var(--paper-raised);
+    border:1px solid var(--line);border-radius:4px;
+    box-shadow:0 18px 40px -22px rgba(28,35,51,0.35);
+    padding:34px 34px 28px;
+  }
+  .login-mark{text-align:left;margin-bottom:22px;}
+  .login-mark .mark{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:20px;letter-spacing:-0.01em;color:var(--ink);}
+  .login-mark .tag{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);letter-spacing:0.05em;text-transform:uppercase;margin-top:3px;}
+  .login-rule{height:2px;background:var(--ink);margin:18px 0 20px;}
+
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px;}
+  .field label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-soft);font-weight:600;}
+  .field input{
+    font-family:'IBM Plex Mono',monospace;font-size:13.8px;color:var(--ink);
+    border:1px solid var(--line-strong);border-radius:var(--radius);
+    padding:10px 11px;background:#fff;width:100%;
+  }
+  .row-between{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+  .remember{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-soft);}
+  .remember input{width:14px;height:14px;}
+
+  .btn-signin{width:100%;padding:11px;font-size:13.5px;}
+
+  .alert{
+    display:flex;gap:9px;align-items:flex-start;
+    border-radius:var(--radius);padding:11px 12px;margin-bottom:18px;font-size:12.8px;line-height:1.4;
+  }
+  .alert-error{background:var(--red-bg);color:#8A3222;border:1px solid #E0BDB2;}
+  .alert-success{background:var(--green-bg);color:#215044;border:1px solid #BFDBD1;}
+  .alert .glyph{font-family:'IBM Plex Mono',monospace;font-weight:700;}
+
+  .login-foot{margin-top:22px;padding-top:16px;border-top:1px solid var(--line);text-align:center;}
+  .login-foot span{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-faint);}
+</style>
+</head>
+<body class="login-body">
+
+  <div class="login-card">
+    <div class="login-mark">
+      <div class="mark">Tax Reporter</div>
+      <div class="tag">Ledger Console — Sign in</div>
+    </div>
+    <div class="login-rule"></div>
+
+    <!-- Spring Security default params: ?error and ?logout -->
+    <div class="alert alert-error" th:if="${param.error}">
+      <span class="glyph">!</span>
+      <span>Incorrect username or password. Check your credentials and try again.</span>
+    </div>
+    <div class="alert alert-success" th:if="${param.logout}">
+      <span class="glyph">✓</span>
+      <span>You've been signed out.</span>
+    </div>
+
+    <!-- th:action + Spring Security's CsrfRequestDataValueProcessor auto-inserts the CSRF hidden field -->
+    <form th:action="@{/login}" method="post">
+      <div class="field">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required>
+      </div>
+
+      <div class="row-between">
+        <label class="remember">
+          <input type="checkbox" name="remember-me">
+          Keep me signed in
+        </label>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-signin">Sign in</button>
+    </form>
+
+    <div class="login-foot">
+      <span>MAGICASH5 · Oracle → Postgres reconciliation</span>
+    </div>
+  </div>
+
+</body>
+</html>

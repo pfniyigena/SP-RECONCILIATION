@@ -61,6 +61,18 @@ public final class CustomerDepositSpecifications {
             spec = spec.and((root, query, cb) -> root.get("customer").get("id").in(filter.getCustomerIds()));
         }
 
+        // Security-level scoping for ROLE_CUSTOMER_SCOPED users (see CustomerAccessScopeService).
+        // ANDed on top of whatever customerIds the user picked above, so a scoped user's own
+        // filter choices can only ever narrow further within their allowed set, never escape it.
+        if (filter.getRestrictToCustomerIds() != null) {
+            if (filter.getRestrictToCustomerIds().isEmpty()) {
+                // Scoped, but nothing assigned yet — must see nothing, not everything.
+                spec = spec.and((root, query, cb) -> cb.disjunction());
+            } else {
+                spec = spec.and((root, query, cb) -> root.get("customer").get("id").in(filter.getRestrictToCustomerIds()));
+            }
+        }
+
         return spec;
     }
 }
