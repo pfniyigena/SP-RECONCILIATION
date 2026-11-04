@@ -24,11 +24,11 @@
         <span class="glyph">≡</span> Transactions
       </a>
       <a class="nav-item" th:classappend="${active == 'invoices'} ? 'active'"
-         th:href="@{/invoices}" sec:authorize="hasAnyRole('ADMIN','ANALYST')">
+         th:href="@{/invoices}" sec:authorize="hasAnyRole('ADMIN','ANALYST','CUSTOMER_SCOPED')">
         <span class="glyph">🧾</span> Invoices
       </a>
       <a class="nav-item" th:classappend="${active == 'customerDeposits'} ? 'active'"
-         th:href="@{/customer-deposits}" sec:authorize="hasAnyRole('ADMIN','ANALYST')">
+         th:href="@{/customer-deposits}" sec:authorize="hasAnyRole('ADMIN','ANALYST','CUSTOMER_SCOPED')">
         <span class="glyph">⛁</span> Customer Deposits
       </a>
       <a class="nav-item" th:classappend="${active == 'machines'} ? 'active'"

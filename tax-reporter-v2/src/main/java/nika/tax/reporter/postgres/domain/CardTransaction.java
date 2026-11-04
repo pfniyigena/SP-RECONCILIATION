@@ -10,6 +10,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import lombok.AccessLevel;
@@ -170,5 +172,28 @@ public class CardTransaction extends AbstractEntity {
 		}
 		this.ebmNumber = null;
 		return null;
+	}
+
+	/**
+	 * Strips every space from plateNumber right before this entity is actually written to the
+	 * database — @PrePersist/@PreUpdate, not a custom setter. This entity uses @Builder, and
+	 * Lombok's generated builder code sets fields DIRECTLY (this.plateNumber = plateNumber
+	 * inside build()), never through the entity's own setter — so a custom setPlateNumber()
+	 * override would silently do nothing for anything constructed via
+	 * CardTransaction.builder()...build(), which is exactly how the Oracle ingestion path
+	 * (CardTransactionDto.toCardTransactionEntity()) builds these. A lifecycle callback runs
+	 * at flush time against whatever the field's actual value is, regardless of how it got
+	 * there — builder, setter, or anything else — so it can't be bypassed the same way.
+	 * Complements, doesn't replace, the query-side replace(...) fix in
+	 * TaxReporterInvoiceRepository's plate-number matching query — that query also strips the
+	 * incoming parameter, which still matters for data already stored before this existed, or
+	 * for any other source of CardTransaction rows this callback doesn't cover.
+	 */
+	@PrePersist
+	@PreUpdate
+	private void normalizePlateNumber() {
+		if (this.plateNumber != null) {
+			this.plateNumber = this.plateNumber.replace(" ", "");
+		}
 	}
 }

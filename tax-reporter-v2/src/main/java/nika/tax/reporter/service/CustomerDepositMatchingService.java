@@ -227,7 +227,7 @@ public class CustomerDepositMatchingService {
             customerDepositRepository.saveAll(depositsTouched);
         }
         if (!newlyCompleted.isEmpty()) {
-            cardTransactionRepository.saveAll(newlyCompleted);
+            cardTransactionRepository.markAllocated(newlyCompleted.stream().map(CardTransaction::getId).toList());
         }
 
         return completedCount;

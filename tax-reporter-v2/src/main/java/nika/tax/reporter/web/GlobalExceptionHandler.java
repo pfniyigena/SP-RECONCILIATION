@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 /**
  * Added alongside CardTransactionService.getOrThrow switching from ResponseStatusException to
@@ -26,5 +27,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(EntityNotFoundException.class)
     public void handleEntityNotFound(EntityNotFoundException ex) {
         throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
+    }
+
+    /** Genuine edit conflict (someone else saved the same record after this form was loaded). */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public void handleOptimisticLock(ObjectOptimisticLockingFailureException ex) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "This record was changed by someone else (or a background job) while you were working on it. Go back, reload the page and try again.", ex);
     }
 }

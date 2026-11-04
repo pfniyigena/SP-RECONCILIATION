@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
 <meta charset="UTF-8">
 <title>Invoice Detail — Tax Reporter</title>
@@ -185,12 +185,12 @@
 
     <div class="detail-actions">
       <a class="btn btn-ghost" th:href="@{/invoices}">Back to ledger</a>
-      <form th:if="${inv.processed != true}" class="confirm-submit" style="display:inline;"
+      <form th:if="${inv.processed != true}" sec:authorize="hasRole('ADMIN')" class="confirm-submit" style="display:inline;"
             data-confirm="Mark this invoice as processed? This also clears any recorded failure reason."
             th:action="@{/invoices/{id}/process(id=${inv.id})}" method="post">
         <button type="submit" class="btn" style="background:var(--green);color:#fff;border-color:var(--green);">Mark as Processed</button>
       </form>
-      <a class="btn btn-primary" th:href="@{/invoices/{id}/edit(id=${inv.id})}">Edit invoice</a>
+      <a class="btn btn-primary" sec:authorize="hasRole('ADMIN')" th:href="@{/invoices/{id}/edit(id=${inv.id})}">Edit invoice</a>
     </div>
   </div>
 

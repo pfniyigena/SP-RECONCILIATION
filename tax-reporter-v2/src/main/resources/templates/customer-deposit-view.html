@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
 <meta charset="UTF-8">
 <title>Deposit Detail — Tax Reporter</title>
@@ -175,12 +175,12 @@
 
     <div class="detail-actions">
       <a class="btn btn-ghost" th:href="@{/customer-deposits}">Back to deposits</a>
-      <form class="confirm-submit" style="display:inline;"
+      <form sec:authorize="hasRole('ADMIN')" class="confirm-submit" style="display:inline;"
             data-confirm="Fetch stamp data from the SQL Server Stamp table using this deposit's SAP reference? If found, it will overwrite the Stamp Data field below."
             th:action="@{/customer-deposits/{id}/fetch-stamp-data(id=${deposit.id})}" method="post">
         <button type="submit" class="btn" style="background:var(--green);color:#fff;border-color:var(--green);">Fetch stamp data (SQL Server)</button>
       </form>
-      <a class="btn btn-primary" th:href="@{/customer-deposits/{id}/edit(id=${deposit.id})}">Edit deposit</a>
+      <a class="btn btn-primary" sec:authorize="hasRole('ADMIN')" th:href="@{/customer-deposits/{id}/edit(id=${deposit.id})}">Edit deposit</a>
     </div>
 
   </main>

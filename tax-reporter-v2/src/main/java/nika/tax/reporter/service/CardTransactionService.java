@@ -79,12 +79,9 @@ public class CardTransactionService {
         if (stampData == null) {
             stampData = processTransaction(transaction);
         }
-        if (stampData != null) {
-            transaction.setStampData(stampData);
-            transaction.setSuccess(Boolean.TRUE);
-        }
-        transaction.setProcessed(true);
-        return repository.save(transaction);
+        repository.updateMatchResult(id, stampData != null ? Boolean.TRUE : transaction.getSuccess(),
+                stampData != null ? stampData : transaction.getStampData());
+        return getOrThrow(id);
     }
 
     /**
@@ -133,24 +130,15 @@ public class CardTransactionService {
         for (CardTransaction transaction : unprocessedTransactions) {
             String stampData = processTransactionWithPlateNumber(transaction);
             if (stampData == null) {
-                // Only tried if the precise (plate number + exact paid amount) match above
-                // missed — the pasted version ran this unconditionally after the plate-number
-                // attempt, which had a real bug: if the plate-number match succeeded, this
-                // would still run, potentially find a DIFFERENT invoice under the tolerant
-                // date/amount matching, and overwrite the transaction's stampData with that
-                // one instead — while the FIRST invoice stayed marked processed=true, now
-                // orphaned (still flagged as matched, but no longer the invoice this
-                // transaction's stampData actually points to). An else here, not two
-                // unconditional attempts, is what "try the precise match, fall back to the
-                // tolerant one" actually requires.
+                // fallback only when the precise plate-number match missed (see history in README)
                 stampData = processTransaction(transaction);
             }
-            if (stampData != null) {
-                transaction.setStampData(stampData);
-                transaction.setSuccess(Boolean.TRUE);
-            }
-            transaction.setProcessed(true);
-            repository.save(transaction);
+            // Targeted update, not repository.save(transaction): this loop holds a copy loaded
+            // before the (slow) invoice matching, and other writers (deposit allocation,
+            // reconciliation) may have changed the row meanwhile.
+            repository.updateMatchResult(transaction.getId(),
+                    stampData != null ? Boolean.TRUE : transaction.getSuccess(),
+                    stampData != null ? stampData : transaction.getStampData());
         }
     }
 
@@ -162,12 +150,39 @@ public class CardTransactionService {
      * number — this is the more specific signal when a plate number is actually available.
      */
     private String processTransactionWithPlateNumber(CardTransaction transaction) {
+        // Guard added after actually tracing the null path, not assumed safe. Without this,
+        // a null plate number goes straight into the query as :plateNumber. What happens next
+        // depends on whether Hibernate translates JPQL's concat() to the standard "||"
+        // operator (NULL poisons the result, row excluded — safe, but only as a side effect)
+        // or to Postgres's native concat() function (non-standard: treats NULL as an empty
+        // string, so concat('%', NULL, '%') becomes the wildcard '%%', which matches every
+        // invoice with ANY plate number at all — silently wrong matches for a transaction
+        // that has none, not a crash but arguably worse). Rather than depend on which of
+        // those this ORM/DB combination actually does, skip the query entirely when there's
+        // nothing to search for — falls through to the caller's processTransaction()
+        // fallback, same as if this method had genuinely found no match.
+        String plateNumber = getPlateNumberFromTransaction(transaction);
+        if (plateNumber == null) {
+            return null;
+        }
+        // Same reasoning as the plateNumber guard above, for the other two fields this method
+        // depends on: CardTransactionForm requires both via @NotNull, but that only covers
+        // manual entry through the web form — the entity's own @Column annotations have no
+        // nullable=false, and the Oracle ingestion path (CardTransactionDto.
+        // toCardTransactionEntity()) builds the entity directly, bypassing the form and its
+        // validation entirely. If source data is ever incomplete, .toLocalDate() or
+        // .setScale(...) below would throw NPE rather than this method just reporting "no
+        // match" the way it does for every other unmatchable case.
+        if (transaction.getDateTimeTransaction() == null || transaction.getTotalAmount() == null) {
+            return null;
+        }
+
         LocalDateTime start = transaction.getDateTimeTransaction().toLocalDate().atStartOfDay();
         LocalDateTime end = transaction.getDateTimeTransaction().plusDays(1).toLocalDate().atStartOfDay();
         BigDecimal min = transaction.getTotalAmount().setScale(0, RoundingMode.FLOOR);
         List<TaxReporterInvoice> matchingInvoices = taxReporterInvoiceRepository
                 .findBySdcIdAndPlateNumberContainingIgnoreCaseAndPaidAmountAndPaymentModeContainingIgnoreCaseAndStampDateGreaterThanEqualAndStampDateLessThanOrderByStampDateAsc(
-                        transaction.getSdcId(), getPlateNumberFromTransaction(transaction), min, "CARD", start, end);
+                        transaction.getSdcId(), plateNumber, min, "CARD", start, end);
         for (TaxReporterInvoice invoice : matchingInvoices) {
             invoice.setProcessed(Boolean.TRUE);
             taxReporterInvoiceRepository.save(invoice);
@@ -177,15 +192,38 @@ public class CardTransactionService {
     }
 
     private String processTransaction(CardTransaction transaction) {
+        // Same reasoning as processTransactionWithPlateNumber's guard: CardTransactionForm
+        // requires these via @NotNull, but only for manual entry — the Oracle ingestion path
+        // bypasses the form entirely.
+        if (transaction.getDateTimeTransaction() == null || transaction.getTotalAmount() == null) {
+            return null;
+        }
+
         List<TaxReporterInvoice> matchingInvoices = taxReporterInvoiceRepository
                 .findBySdcIdAndPaymentModeContainingIgnoreCaseAndProcessedOrderByStampDateAsc(transaction.getSdcId(),
                         "CARD", Boolean.FALSE);
         for (TaxReporterInvoice invoice : matchingInvoices) {
+            // Neither branch below can meaningfully evaluate without these — skip straight to
+            // the next candidate invoice rather than let a null stampDate/paidAmount throw
+            // partway through (LocalDateTime.minusDays and BigDecimal.compareTo both require
+            // a non-null receiver/argument; there's no query-level filter excluding invoices
+            // missing either field from this candidate list).
+            if (invoice.getStampDate() == null || invoice.getPaidAmount() == null) {
+                continue;
+            }
+
             LocalDateTime transactionDate = transaction.getDateTimeTransaction();
             LocalDateTime invoiceDate = invoice.getStampDate();
             LocalDateTime invoiceDateMinusBackDays = invoice.getStampDate().minusDays(backDays);
             BigDecimal transactionAmount = transaction.getTotalAmount();
-            BigDecimal transactionAmount2 = transaction.getQuantity().multiply(transaction.getUnitPrice());
+            // quantity/unitPrice have no @NotNull on the form at all (unlike
+            // dateTimeTransaction/totalAmount above) — reachable via ordinary manual entry,
+            // not just Oracle ingestion. null here means "this alternate amount check doesn't
+            // apply to this transaction", not a reason to abort the whole match attempt —
+            // transactionAmount (the primary totalAmount) is still valid and still checked.
+            BigDecimal transactionAmount2 = (transaction.getQuantity() != null && transaction.getUnitPrice() != null)
+                    ? transaction.getQuantity().multiply(transaction.getUnitPrice())
+                    : null;
             BigDecimal invoiceAmount = invoice.getPaidAmount();
 
             if (transactionDate.toLocalDate().equals(invoiceDate.toLocalDate())) {
@@ -227,19 +265,28 @@ public class CardTransactionService {
      * totalAmount and the independently-computed quantity*unitPrice — plus the magnitude
      * fallback below. Extracted into one method only to de-duplicate the two identical
      * if-conditions in processTransaction (same-day vs. backdated-day branches used to repeat
-     * this whole expression); the actual comparisons are unchanged. */
+     * this whole expression); the actual comparisons are unchanged.
+     *
+     * transactionAmount2 may be null (quantity or unitPrice missing on the transaction — see
+     * the caller) — every check involving it is skipped in that case rather than thrown,
+     * falling back to just the transactionAmount-based checks and the magnitude fallback.
+     * transactionAmount/invoiceAmount are guaranteed non-null by the caller's own guards
+     * before this method is ever reached, so those aren't re-checked here. */
     private boolean amountsMatch(BigDecimal transactionAmount, BigDecimal transactionAmount2, BigDecimal invoiceAmount) {
-        return (transactionAmount.compareTo(invoiceAmount) == 0)
-                || (transactionAmount2.compareTo(invoiceAmount) == 0)
-                || (transactionAmount.toBigInteger().compareTo(invoiceAmount.toBigInteger()) == 0)
+        boolean transactionAmount2Matches = transactionAmount2 != null && (
+                (transactionAmount2.compareTo(invoiceAmount) == 0)
                 || (transactionAmount2.toBigInteger().compareTo(invoiceAmount.toBigInteger()) == 0)
-                || (transactionAmount.setScale(0, RoundingMode.DOWN)
-                        .compareTo(invoiceAmount.setScale(0, RoundingMode.DOWN)) == 0)
                 || (transactionAmount2.setScale(0, RoundingMode.DOWN)
                         .compareTo(invoiceAmount.setScale(0, RoundingMode.DOWN)) == 0)
-                || (transactionAmount.setScale(0, RoundingMode.HALF_UP)
-                        .compareTo(invoiceAmount.setScale(0, RoundingMode.HALF_UP)) == 0)
                 || (transactionAmount2.setScale(0, RoundingMode.HALF_UP)
+                        .compareTo(invoiceAmount.setScale(0, RoundingMode.HALF_UP)) == 0));
+
+        return (transactionAmount.compareTo(invoiceAmount) == 0)
+                || transactionAmount2Matches
+                || (transactionAmount.toBigInteger().compareTo(invoiceAmount.toBigInteger()) == 0)
+                || (transactionAmount.setScale(0, RoundingMode.DOWN)
+                        .compareTo(invoiceAmount.setScale(0, RoundingMode.DOWN)) == 0)
+                || (transactionAmount.setScale(0, RoundingMode.HALF_UP)
                         .compareTo(invoiceAmount.setScale(0, RoundingMode.HALF_UP)) == 0)
                 || isWithinMagnitude(transactionAmount, invoiceAmount);
     }

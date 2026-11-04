@@ -428,8 +428,10 @@
             </td>
             <td class="num" style="white-space:nowrap;">
               <a th:href="@{/transactions/{id}(id=${tx.id})}" style="font-size:12.5px;font-weight:600;color:var(--green);text-decoration:none;">View</a>
+              <th:block sec:authorize="hasRole('ADMIN')">
               &nbsp;·&nbsp;
               <a th:href="@{/transactions/{id}/edit(id=${tx.id})}" style="font-size:12.5px;font-weight:600;color:var(--ink-soft);text-decoration:none;">Edit</a>
+              </th:block>
             </td>
           </tr>
         </tbody>

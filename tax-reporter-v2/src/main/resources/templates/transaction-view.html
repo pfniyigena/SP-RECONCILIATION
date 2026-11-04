@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
 <meta charset="UTF-8">
 <title>Transaction Detail — Tax Reporter</title>
@@ -218,12 +218,12 @@
 
     <div class="detail-actions">
       <a class="btn btn-ghost" th:href="@{/transactions}">Back to ledger</a>
-      <form th:if="${tx.processed != true}" class="confirm-submit" style="display:inline;"
+      <form th:if="${tx.processed != true}" sec:authorize="hasRole('ADMIN')" class="confirm-submit" style="display:inline;"
             data-confirm="Mark this transaction as processed? This confirms it manually — it doesn't re-run the automated matching engine."
             th:action="@{/transactions/{id}/process(id=${tx.id})}" method="post">
         <button type="submit" class="btn" style="background:var(--green);color:#fff;border-color:var(--green);">Mark as Processed</button>
       </form>
-      <a class="btn btn-primary" th:href="@{/transactions/{id}/edit(id=${tx.id})}">Edit transaction</a>
+      <a class="btn btn-primary" sec:authorize="hasRole('ADMIN')" th:href="@{/transactions/{id}/edit(id=${tx.id})}">Edit transaction</a>
     </div>
   </div>
 

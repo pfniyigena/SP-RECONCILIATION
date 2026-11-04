@@ -121,10 +121,7 @@ public class ReconciliationService {
                 .build();
         batch = repository.saveAndFlush(batch);
 
-        for (CardTransaction tx : transactions) {
-            tx.setReconciliation(batch);
-        }
-        cardTransactionRepository.saveAll(transactions);
+        assignAll(batch, transactions);
 
         return batch;
     }
@@ -165,11 +162,21 @@ public class ReconciliationService {
                 .build();
         batch = repository.saveAndFlush(batch);
 
-        for (CardTransaction tx : transactions) {
-            tx.setReconciliation(batch);
-        }
-        cardTransactionRepository.saveAll(transactions);
+        assignAll(batch, transactions);
 
         return batch;
+    }
+
+    /** Claims the rows in chunks via a targeted update; throws if any was taken by someone else meanwhile. */
+    private void assignAll(Reconciliation batch, List<CardTransaction> transactions) {
+        List<UUID> ids = transactions.stream().map(CardTransaction::getId).toList();
+        int updated = 0;
+        for (int i = 0; i < ids.size(); i += 1000) {
+            updated += cardTransactionRepository.assignReconciliation(batch, ids.subList(i, Math.min(i + 1000, ids.size())));
+        }
+        if (updated != ids.size()) {
+            throw new ReconciliationException((ids.size() - updated)
+                    + " transaction(s) were reconciled by someone else while this ran - refresh and try again.");
+        }
     }
 }

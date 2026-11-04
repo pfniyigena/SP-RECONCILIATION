@@ -10,8 +10,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import nika.tax.reporter.postgres.domain.CardTransaction;
 
@@ -86,4 +88,29 @@ public interface CardTransactionRepository
      * IncorrectResultSizeDataAccessException if two rows ever share one. Flagged, not silently
      * assumed safe. */
     Optional<CardTransaction> getByTransactionGuid(String transactionGuid);
+
+    // ---- Targeted writers -------------------------------------------------------------
+    // The matching job, deposit allocation, reconciliation and "mark processed" all touch
+    // DIFFERENT columns of the same card_transaction rows, concurrently. Saving a whole loaded
+    // entity from each of them meant the second to commit hit a stale @Version
+    // (ObjectOptimisticLockingFailureException) - and, worse, would have written its stale
+    // copy of the OTHER writers' columns back. These update only their own columns, atomically
+    // in SQL, and "versioned" still bumps @Version so a stale full-entity save (the edit form)
+    // is correctly rejected rather than silently overwriting.
+
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update versioned CardTransaction t set t.processed = true, t.success = :success, t.stampData = :stampData where t.id = :id")
+    int updateMatchResult(@Param("id") UUID id, @Param("success") Boolean success, @Param("stampData") String stampData);
+
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update versioned CardTransaction t set t.allocated = true where t.id in :ids")
+    int markAllocated(@Param("ids") Collection<UUID> ids);
+
+    /** Only claims rows still unreconciled, so two concurrent reconciles can never both take the same row. */
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update versioned CardTransaction t set t.reconciliation = :batch where t.id in :ids and t.reconciliation is null")
+    int assignReconciliation(@Param("batch") nika.tax.reporter.postgres.domain.Reconciliation batch, @Param("ids") Collection<UUID> ids);
 }

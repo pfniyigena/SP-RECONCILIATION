@@ -5,6 +5,8 @@ import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import lombok.AccessLevel;
@@ -87,5 +89,23 @@ public class TaxReporterInvoice extends AbstractEntity {
         if (this.stampData != null && !this.stampData.isEmpty())
             this.stampNumber = this.stampData.split(",")[0] + "/" + this.stampData.split(",")[1];
         return this.stampNumber;
+    }
+
+    /**
+     * Same reasoning and same fix as CardTransaction.normalizePlateNumber — this entity also
+     * uses @Builder, whose generated code sets fields directly rather than through setters, so
+     * a custom setPlateNumber() override would silently miss anything built via
+     * TaxReporterInvoice.builder()...build() (the invoice-ingestion path,
+     * TaxReporterInvoiceService.toInvoice()). A lifecycle callback runs at flush time against
+     * the field's actual value regardless of construction path, so it can't be bypassed the
+     * same way. Complements, doesn't replace, the query-side replace(...) fix already in
+     * TaxReporterInvoiceRepository's plate-number matching query.
+     */
+    @PrePersist
+    @PreUpdate
+    private void normalizePlateNumber() {
+        if (this.plateNumber != null) {
+            this.plateNumber = this.plateNumber.replace(" ", "");
+        }
     }
 }

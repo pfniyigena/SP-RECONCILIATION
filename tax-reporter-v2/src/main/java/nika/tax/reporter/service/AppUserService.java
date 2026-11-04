@@ -45,7 +45,7 @@ public class AppUserService {
     }
 
     public AppUser getOrThrow(UUID id) {
-        return repository.findById(id)
+        return repository.findWithCustomersById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No user found with id " + id));
     }
 
@@ -65,6 +65,7 @@ public class AppUserService {
     }
 
     /** Blank password on the form means "leave it unchanged". */
+    @org.springframework.transaction.annotation.Transactional
     public AppUser update(UUID id, AppUserForm form) {
         AppUser entity = getOrThrow(id);
         AppUserMapper.applyToEntity(form, entity);
