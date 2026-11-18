@@ -20,6 +20,8 @@ public class CardTransactionFilter {
     private BigDecimal maxAmount;
     private List<UUID> machineIds;
     private List<UUID> customerIds;
+    /** true = also show inactive transactions (default: hidden). */
+    private Boolean includeInactive;
 
     /**
      * Security-level customer scoping for ROLE_CUSTOMER_SCOPED users — set by

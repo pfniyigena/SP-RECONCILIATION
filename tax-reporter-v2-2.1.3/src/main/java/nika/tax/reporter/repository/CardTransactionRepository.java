@@ -78,15 +78,20 @@ public interface CardTransactionRepository
     List<CardTransaction> getBySdcIdAndProcessedOrderByDateTimeTransactionAsc(String sdcId, Boolean processed);
 
     /** Same queue, but ignoring transactions dated before {@code from} (matching.start.date). */
+    @Query("select t from CardTransaction t where t.sdcId = :sdcId and t.processed = :processed "
+            + "and t.dateTimeTransaction >= :from and t.active = true order by t.dateTimeTransaction asc")
     List<CardTransaction> getBySdcIdAndProcessedAndDateTimeTransactionGreaterThanEqualOrderByDateTimeTransactionAsc(
-            String sdcId, Boolean processed, java.time.LocalDateTime from);
+            @Param("sdcId") String sdcId, @Param("processed") Boolean processed, @Param("from") java.time.LocalDateTime from);
 
-    List<CardTransaction> findByCustomer_IdAndAllocatedOrderByDateTimeTransactionAsc(UUID customerId, Boolean allocated);
+    @Query("select t from CardTransaction t where t.customer.id = :customerId and t.allocated = :allocated "
+            + "and t.active = true order by t.dateTimeTransaction asc")
+    List<CardTransaction> findByCustomer_IdAndAllocatedOrderByDateTimeTransactionAsc(
+            @Param("customerId") UUID customerId, @Param("allocated") Boolean allocated);
 
     /** Distinct customers with at least one unallocated, customer-linked transaction — drives
      * CustomerDepositMatchingService.matchAll(), which only bothers running the per-customer
      * algorithm for customers that actually have something left to allocate. */
-    @Query("select distinct t.customer.id from CardTransaction t where t.allocated = false and t.customer is not null")
+    @Query("select distinct t.customer.id from CardTransaction t where t.allocated = false and t.active = true and t.customer is not null")
     List<UUID> findDistinctCustomerIdsWithUnallocatedTransactions();
 
     /** Used by the Oracle ingestion jobs to check whether a transaction has already been
@@ -120,4 +125,9 @@ public interface CardTransactionRepository
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("update versioned CardTransaction t set t.reconciliation = :batch where t.id in :ids and t.reconciliation is null")
     int assignReconciliation(@Param("batch") nika.tax.reporter.postgres.domain.Reconciliation batch, @Param("ids") Collection<UUID> ids);
+
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update versioned CardTransaction t set t.active = :active where t.id = :id")
+    int updateActive(@Param("id") UUID id, @Param("active") Boolean active);
 }

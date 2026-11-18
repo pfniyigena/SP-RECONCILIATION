@@ -53,6 +53,13 @@ public class CardTransactionService {
                 .orElseThrow(() -> new EntityNotFoundException("Transaction not found"));
     }
 
+    /** Marks a transaction active or inactive (targeted update; does not touch allocations). */
+    public void setActive(UUID id, boolean active) {
+        if (repository.updateActive(id, active) == 0) {
+            throw new EntityNotFoundException("Transaction not found");
+        }
+    }
+
     public CardTransaction update(UUID id, CardTransactionForm form) {
         CardTransaction entity = getOrThrow(id);
         CardTransactionMapper.applyToEntity(form, entity);

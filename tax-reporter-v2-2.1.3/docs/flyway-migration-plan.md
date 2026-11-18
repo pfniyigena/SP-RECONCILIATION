@@ -18,7 +18,7 @@ How it behaves
 ## REHEARSE BEFORE PRODUCTION (important - `validate` was not run against a real database here)
 1. Restore a production backup into a scratch Postgres database.
 2. Start the app against it with validation switched on, even in dev:
-   `java -jar tax-reporter-2.1.2-dev.jar --spring.jpa.hibernate.ddl-auto=validate`
+   `java -jar tax-reporter-2.1.3-dev.jar --spring.jpa.hibernate.ddl-auto=validate`
 3. Expect in the log: `Creating Schema History table`, `Successfully baselined schema with version: 1`,
    `Migrating schema "public" to version "2"`, then a normal startup.
 4. If it stops with `Schema-validation: ...`, send me the message. Fix it with a new `V3__...sql`, never by

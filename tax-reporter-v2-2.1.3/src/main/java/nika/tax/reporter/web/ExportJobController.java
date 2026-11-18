@@ -66,6 +66,7 @@ public class ExportJobController {
             @RequestParam Optional<BigDecimal> maxAmount,
             @RequestParam(name = "machineId", required = false) List<UUID> machineIds,
             @RequestParam(name = "customerId", required = false) List<UUID> customerIds,
+            @RequestParam Optional<Boolean> includeInactive,
             @RequestParam(defaultValue = "dateTimeTransaction,desc") String sort,
             Authentication authentication) {
 
@@ -75,6 +76,7 @@ public class ExportJobController {
         }
 
         CardTransactionFilter filter = CardTransactionFilter.builder()
+                .includeInactive(includeInactive.orElse(null))
                 .q(q.orElse(null))
                 .status(status.orElse(null))
                 .dateFrom(dateFrom.orElse(null))

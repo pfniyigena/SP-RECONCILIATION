@@ -20,6 +20,10 @@ public final class CardTransactionSpecifications {
         // specification entirely on purpose.
         Specification<CardTransaction> spec = (root, query, cb) -> cb.isNull(root.get("reconciliation"));
 
+        if (filter == null || !Boolean.TRUE.equals(filter.getIncludeInactive())) {
+            spec = spec.and((root, query, cb) -> cb.isTrue(root.get("active")));
+        }
+
         if (filter == null) {
             return spec;
         }

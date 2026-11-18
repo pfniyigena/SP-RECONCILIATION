@@ -86,6 +86,10 @@ public class CardTransaction extends AbstractEntity {
 	@Column(name = "allocated")
 	@Builder.Default
 	private Boolean allocated = Boolean.FALSE;
+	/** false = excluded from lists, exports, matching, allocation and reconciliation (data kept). */
+	@Column(name = "active", nullable = false)
+	@Builder.Default
+	private Boolean active = Boolean.TRUE;
 	@ToString.Exclude
 	@ManyToOne
 	@JoinColumn(name = "machine_id")

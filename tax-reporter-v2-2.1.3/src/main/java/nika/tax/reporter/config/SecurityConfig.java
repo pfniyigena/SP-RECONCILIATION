@@ -45,7 +45,7 @@ public class SecurityConfig {
                 // the customer-scoped bulk "reconcile all matching" path, which got its own
                 // deliberate ROLE_CUSTOMER_SCOPED treatment earlier and isn't being undone here;
                 // reconciling isn't a per-record edit the way these are.
-                .requestMatchers("/transactions/*/edit", "/transactions/*/process").hasRole("ADMIN")
+                .requestMatchers("/transactions/*/edit", "/transactions/*/process", "/transactions/*/active").hasRole("ADMIN")
                 .requestMatchers("/invoices/*/edit", "/invoices/*/process").hasRole("ADMIN")
                 .requestMatchers("/customer-deposits/*/edit", "/customer-deposits/*/fetch-stamp-data", "/customer-deposits/match").hasRole("ADMIN")
                 // Invoices - open to ROLE_CUSTOMER_SCOPED for viewing. Invoices have no customer link

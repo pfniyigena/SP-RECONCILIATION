@@ -3,6 +3,14 @@
 Spring Boot + PostgreSQL + JPA + Thymeleaf app for browsing `card_transaction` records,
 with a sidebar-navigated ledger UI and username/password login.
 
+## 2.1.3 — inactive flag on card transactions
+
+New column `card_transaction.active` (Flyway V3, default true). An inactive transaction is hidden from the
+ledger list by default (admins and others can tick "Include inactive" in the filter), excluded from exports
+unless that option is on, and skipped by card matching, deposit allocation and reconciliation. Nothing is
+deleted and existing `deposit_card_transaction` allocations are untouched. ADMIN toggles it with
+"Mark as Inactive / Active" on the transaction page (`POST /transactions/{id}/active`).
+
 ## 2.1.2 — matching ignores card transactions before 11 June 2026
 
 The matching job (`CardTransactionService.matchAndProcessTransactions`) now loads only unprocessed

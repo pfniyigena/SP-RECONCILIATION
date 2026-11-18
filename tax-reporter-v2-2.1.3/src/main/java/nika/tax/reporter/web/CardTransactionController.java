@@ -65,11 +65,13 @@ public class CardTransactionController {
             @RequestParam Optional<BigDecimal> maxAmount,
             @RequestParam(name = "machineId", required = false) List<UUID> machineIds,
             @RequestParam(name = "customerId", required = false) List<UUID> customerIds,
+            @RequestParam Optional<Boolean> includeInactive,
             @PageableDefault(size = 50, sort = "dateTimeTransaction", direction = Sort.Direction.DESC) Pageable pageable,
             Authentication authentication,
             Model model) {
 
         CardTransactionFilter filter = buildFilter(q, status, dateFrom, dateTo, minAmount, maxAmount, machineIds, customerIds);
+        filter.setIncludeInactive(includeInactive.orElse(null));
 
         List<Customer> customers = customerRepository.findAll(Sort.by("clientName"));
 
@@ -90,6 +92,7 @@ public class CardTransactionController {
                 || filter.getDateTo() != null
                 || filter.getMinAmount() != null
                 || filter.getMaxAmount() != null
+                || Boolean.TRUE.equals(filter.getIncludeInactive())
                 || (filter.getMachineIds() != null && !filter.getMachineIds().isEmpty())
                 || (filter.getCustomerIds() != null && !filter.getCustomerIds().isEmpty());
 
@@ -159,6 +162,14 @@ public class CardTransactionController {
         assertAccessible(cardTransactionService.getOrThrow(id), authentication);
         cardTransactionService.markProcessed(id);
         redirectAttributes.addFlashAttribute("flashMessage", "Transaction marked as processed.");
+        return "redirect:/transactions/" + id;
+    }
+
+    @PostMapping("/{id}/active")
+    public String setActive(@PathVariable UUID id, @RequestParam boolean active, RedirectAttributes redirectAttributes) {
+        cardTransactionService.setActive(id, active);
+        redirectAttributes.addFlashAttribute("flashMessage",
+                active ? "Transaction marked as active." : "Transaction marked as inactive.");
         return "redirect:/transactions/" + id;
     }
 
